@@ -1,0 +1,349 @@
+/* ── 主页覆盖：允许滚动 ── */
+  body {
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  /* ── 主页顶栏 ── */
+  .home-header {
+    position: sticky;
+    top: 0;
+  }
+  .home-header .logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1.05rem;
+    font-weight: 500;
+    color: var(--ink-primary);
+  }
+  .home-header .logo svg {
+    width: 26px; height: 26px;
+    color: var(--accent);
+  }
+  .home-header .logo .sub {
+    color: var(--ink-secondary);
+    font-weight: 400;
+    font-size: 0.82rem;
+  }
+
+  /* ── Bento Grid 容器 ── */
+  .bento-wrap {
+    flex: 1;
+    width: 100%;
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 28px 20px 40px;
+  }
+
+  .bento-hero {
+    margin-bottom: 22px;
+  }
+  .bento-hero h1 {
+    font-size: 1.5rem;
+    font-weight: 500;
+    color: var(--ink-primary);
+    margin-bottom: 6px;
+  }
+  .bento-hero p {
+    font-size: 0.88rem;
+    color: var(--ink-secondary);
+  }
+
+  .bento-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-auto-rows: minmax(130px, auto);
+    gap: 18px;
+  }
+
+  /* ── Bento 卡片 ── */
+  .bento-card {
+    background: var(--bg-surface);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    box-shadow: var(--shadow-raise-sm);
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+    transition: box-shadow var(--dur-fast) var(--ease-bounce),
+                transform var(--dur-fast) var(--ease-bounce);
+  }
+  .bento-card:hover {
+    box-shadow: var(--shadow-raise-md);
+  }
+  .bento-card .card-icon {
+    width: 40px; height: 40px;
+    border-radius: var(--radius-sm);
+    display: flex; align-items: center; justify-content: center;
+    background: var(--accent-soft);
+    color: var(--accent-soft-text);
+    margin-bottom: 12px;
+    flex-shrink: 0;
+  }
+  .bento-card .card-icon svg { width: 22px; height: 22px; }
+  .bento-card h3 {
+    font-size: 0.92rem;
+    font-weight: 500;
+    color: var(--ink-primary);
+    margin-bottom: 4px;
+  }
+  .bento-card p {
+    font-size: 0.78rem;
+    color: var(--ink-secondary);
+    line-height: 1.5;
+    flex: 1;
+  }
+  .bento-card .card-tag {
+    display: inline-block;
+    font-size: 0.66rem;
+    padding: 3px 10px;
+    border-radius: var(--radius-full);
+    background: var(--accent-soft);
+    color: var(--accent-soft-text);
+    margin-bottom: 12px;
+    align-self: flex-start;
+  }
+
+  /* 主卡：跨 2 列 2 行 */
+  .bento-main {
+    grid-column: span 2;
+    grid-row: span 2;
+    padding: 28px;
+    background: linear-gradient(135deg, var(--accent-soft) 0%, var(--bg-surface) 60%);
+  }
+  .bento-main .card-tag {
+    background: var(--bg-surface);
+    color: var(--accent-soft-text);
+  }
+  .bento-main h2 {
+    font-size: 1.5rem;
+    font-weight: 500;
+    color: var(--ink-primary);
+    margin-bottom: 10px;
+  }
+  .bento-main .lead {
+    font-size: 0.9rem;
+    color: var(--ink-secondary);
+    line-height: 1.65;
+    margin-bottom: 18px;
+    flex: 0;
+  }
+  .bento-main .feature-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 18px;
+  }
+  .bento-main .feature-list span {
+    font-size: 0.72rem;
+    padding: 5px 12px;
+    border-radius: var(--radius-full);
+    background: var(--bg-surface);
+    color: var(--ink-secondary);
+    box-shadow: var(--shadow-inset);
+  }
+  .bento-main .cta-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: auto;
+  }
+
+  /* 状态卡 */
+  .bento-status .stat-value {
+    font-size: 1.6rem;
+    font-weight: 500;
+    color: var(--accent);
+    margin-top: auto;
+  }
+  .bento-status .stat-label {
+    font-size: 0.72rem;
+    color: var(--ink-muted);
+  }
+
+  /* 进度卡 */
+  .bento-progress .progress-bar {
+    width: 100%;
+    height: 8px;
+    border-radius: var(--radius-full);
+    background: var(--bg-base);
+    box-shadow: var(--shadow-inset);
+    overflow: hidden;
+    margin-top: auto;
+  }
+  .bento-progress .progress-fill {
+    height: 100%;
+    width: 65%;
+    border-radius: var(--radius-full);
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+  }
+  .bento-progress .progress-text {
+    font-size: 0.72rem;
+    color: var(--ink-muted);
+    margin-top: 8px;
+  }
+
+  /* 推荐卡 */
+  .bento-recommend ul {
+    list-style: none;
+    margin-top: auto;
+  }
+  .bento-recommend li {
+    font-size: 0.78rem;
+    color: var(--ink-secondary);
+    padding: 5px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .bento-recommend li::before {
+    content: '';
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent2);
+    flex-shrink: 0;
+  }
+
+  /* 下一步卡 */
+  .bento-next .next-list {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .bento-next .next-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.78rem;
+    color: var(--ink-secondary);
+  }
+  .bento-next .next-item .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--bg-base);
+    box-shadow: var(--shadow-inset);
+    flex-shrink: 0;
+  }
+  .bento-next .next-item.done .dot {
+    background: var(--accent);
+  }
+
+  /* 快速操作卡 */
+  .bento-actions {
+    grid-column: span 2;
+  }
+  .action-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-top: 14px;
+  }
+  .action-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 14px 8px;
+    border: none;
+    border-radius: var(--radius-md);
+    background: var(--bg-elevated);
+    color: var(--ink-secondary);
+    font-size: 0.72rem;
+    cursor: pointer;
+    box-shadow: var(--shadow-raise-sm);
+    transition: all var(--dur-fast) var(--ease-bounce);
+    text-decoration: none;
+  }
+  .action-btn:hover {
+    color: var(--accent);
+    box-shadow: var(--shadow-raise-md);
+    transform: translateY(-2px);
+  }
+  .action-btn:active {
+    box-shadow: var(--shadow-pressed);
+    transform: translateY(0) scale(0.97);
+  }
+  .action-btn svg { width: 22px; height: 22px; }
+
+  /* 更多工具卡 */
+  .bento-more {
+    grid-column: span 2;
+  }
+  .more-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 14px;
+  }
+  .more-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px;
+    border-radius: var(--radius-md);
+    background: var(--bg-elevated);
+    box-shadow: var(--shadow-inset);
+  }
+  .more-item .more-icon {
+    width: 32px; height: 32px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-surface);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--ink-muted);
+    flex-shrink: 0;
+  }
+  .more-item .more-icon svg { width: 18px; height: 18px; }
+  .more-item .more-text { font-size: 0.78rem; color: var(--ink-secondary); }
+  .more-item .more-text small { display: block; font-size: 0.66rem; color: var(--ink-muted); }
+
+  /* ── 响应式 ── */
+  @media (max-width: 720px) {
+    .bento-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .bento-main {
+      grid-column: span 2;
+      grid-row: auto;
+    }
+    .bento-actions, .bento-more {
+      grid-column: span 2;
+    }
+    .action-grid {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+
+  @media (max-width: 460px) {
+    .bento-wrap { padding: 18px 14px 30px; }
+    .bento-grid {
+      grid-template-columns: 1fr;
+      gap: 14px;
+    }
+    .bento-main, .bento-actions, .bento-more {
+      grid-column: span 1;
+    }
+    .bento-main { padding: 20px; }
+    .bento-main h2 { font-size: 1.2rem; }
+    .more-list { grid-template-columns: 1fr; }
+    .action-grid { grid-template-columns: repeat(2, 1fr); }
+    .bento-hero h1 { font-size: 1.2rem; }
+  }
+
+  /* ── View Transitions 扩散动画（与子页一致） ── */
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+    mix-blend-mode: normal;
+  }
+  ::view-transition-new(root) {
+    animation: vt-expand .5s var(--ease-smooth);
+    clip-path: circle(0% at var(--vt-x, 50%) var(--vt-y, 50%));
+  }
+  ::view-transition-old(root) { z-index: 1; }
+  ::view-transition-new(root) { z-index: 2; }
+  @keyframes vt-expand {
+    to { clip-path: circle(150% at var(--vt-x, 50%) var(--vt-y, 50%)); }
+  }

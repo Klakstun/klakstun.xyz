@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>工具集 · Toolkit Hub</title>
+<link rel="stylesheet" href="./midi/css/style.css">
+<link rel="stylesheet" href="./css/style.css">
+<link rel="script" href="./js/fuck.js">
+</head>
+<body>
+<!-- 顶栏 -->
+<header class="home-header">
+  <div class="header-left">
+    <div class="logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="3" width="7" height="7" rx="1.5"/>
+        <rect x="14" y="3" width="7" height="7" rx="1.5"/>
+        <rect x="3" y="14" width="7" height="7" rx="1.5"/>
+        <rect x="14" y="14" width="7" height="7" rx="1.5" fill="currentColor" stroke="none"/>
+      </svg>
+      <span>工具集</span>
+      <span class="sub">Toolkit Hub</span>
+    </div>
+  </div>
+  <div class="header-right">
+    <button class="theme-btn" id="modeBtn" onclick="toggleColorMode(event)" title="深浅模式切换">
+      <svg id="modeIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+      </svg>
+    </button>
+    <button class="theme-btn" id="themeBtn" onclick="toggleThemePopup()" title="主题配色">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20V2z" fill="var(--bg-surface)"/></svg>
+    </button>
+  </div>
+</header>
+<!-- 主内容 -->
+<main class="bento-wrap">
+  <div class="bento-hero">
+    <h1>选择一个工具开始</h1>
+    <p>所有工具共享同一套主题与深浅模式，配置自动同步。</p>
+  </div>
+  <div class="bento-grid">
+    <!-- 主卡：当前最重要任务 -->
+    <div class="bento-card bento-main">
+      <span class="card-tag">推荐 · 主要入口</span>
+      <h2>MIDI 工具集</h2>
+      <p class="lead">文本化 MIDI 编辑器，支持多轨、和弦、变速、循环播放与音频导出。将乐谱以文本形式管理，即用即写。</p>
+      <div class="feature-list">
+        <span>文本编辑</span>
+        <span>实时播放</span>
+        <span>和弦支持</span>
+        <span>音频导出</span>
+        <span>SSTV 编码</span>
+      </div>
+      <div class="cta-row">
+        <a href="./midi/midi.html" class="btn primary">进入 MIDI 工具 →</a>
+        <a href="midi/README_zh.md" class="btn" target="_blank">查看文档</a>
+      </div>
+    </div>
+    <!-- 状态卡 -->
+    <div class="bento-card bento-status">
+      <h3>系统状态</h3>
+      <p>所有服务运行正常</p>
+      <div class="stat-value">在线</div>
+      <div class="stat-label">v1.0 · 已加载 1 个工具</div>
+    </div>
+    <!-- 进度卡 -->
+    <div class="bento-card bento-progress">
+      <h3>开发进度</h3>
+      <p>工具集建设中</p>
+      <div class="progress-bar"><div class="progress-fill"></div></div>
+      <div class="progress-text">65% · 更多工具即将上线</div>
+    </div>
+    <!-- 推荐卡 -->
+    <div class="bento-card bento-recommend">
+      <h3>推荐工具</h3>
+      <p>根据使用频率推荐</p>
+      <ul>
+        <li>MIDI 文本编辑器</li>
+        <li>音频导出器</li>
+        <li>SSTV 文本转音频</li>
+      </ul>
+    </div>
+    <!-- 下一步卡 -->
+    <div class="bento-card bento-next">
+      <h3>即将推出</h3>
+      <p>路线图</p>
+      <div class="next-list">
+        <div class="next-item done"><span class="dot"></span>MIDI 工具集</div>
+        <div class="next-item"><span class="dot"></span>音频频谱分析</div>
+        <div class="next-item"><span class="dot"></span>波形可视化</div>
+      </div>
+    </div>
+    <!-- 快速操作卡 -->
+    <div class="bento-card bento-actions">
+      <h3>快速操作</h3>
+      <p>常用功能直达</p>
+      <div class="action-grid">
+        <a href="midi/index.html" class="action-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+          MIDI 编辑
+        </a>
+        <a href="midi/index.html#tab-export" class="action-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          音频导出
+        </a>
+        <a href="midi/index.html#tab-sstv" class="action-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+          SSTV 编码
+        </a>
+      </div>
+    </div>
+    <!-- 更多工具卡（预留接口） -->
+    <div class="bento-card bento-more">
+      <h3>更多工具</h3>
+      <p>未来将不会接入，不会预留扩展接口 (bushi</p>
+      <div class="more-list">
+        <div class="more-item">
+          <div class="more-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l3-9 4 18 3-9h4"/></svg>
+          </div>
+          <div class="more-text">频谱分析 <small>开发中</small></div>
+        </div>
+        <div class="more-item">
+          <div class="more-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <div class="more-text">节拍器 <small>开发中</small></div>
+        </div>
+        <div class="more-item">
+          <div class="more-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/></svg>
+          </div>
+          <div class="more-text">音频剪辑 <small>规划中</small></div>
+        </div>
+        <div class="more-item">
+          <div class="more-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          </div>
+          <div class="more-text">音色库 <small>规划中</small></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+<!-- 主题配色弹窗 -->
+<div class="theme-popup" id="themePopup">
+  <div class="theme-popup-header">主题配色</div>
+  <div class="theme-grid">
+    <button class="theme-swatch" data-theme="default" onclick="applyTheme('default')" title="默认紫粉">
+      <span class="swatch-circle" style="background:#c4b0f7;"></span>
+      <span class="swatch-circle" style="background:#f2b5cc;"></span>
+      <span class="swatch-label">默认</span>
+    </button>
+    <button class="theme-swatch" data-theme="ocean" onclick="applyTheme('ocean')" title="海洋蓝">
+      <span class="swatch-circle" style="background:#b3d4ff;"></span>
+      <span class="swatch-circle" style="background:#7dd3c0;"></span>
+      <span class="swatch-label">海洋</span>
+    </button>
+    <button class="theme-swatch" data-theme="forest" onclick="applyTheme('forest')" title="森林绿">
+      <span class="swatch-circle" style="background:#b8f0b8;"></span>
+      <span class="swatch-circle" style="background:#ffd470;"></span>
+      <span class="swatch-label">森林</span>
+    </button>
+    <button class="theme-swatch" data-theme="sunset" onclick="applyTheme('sunset')" title="日落橙">
+      <span class="swatch-circle" style="background:#ffb4a2;"></span>
+      <span class="swatch-circle" style="background:#ffd470;"></span>
+      <span class="swatch-label">日落</span>
+    </button>
+    <button class="theme-swatch" data-theme="lavender" onclick="applyTheme('lavender')" title="薰衣草">
+      <span class="swatch-circle" style="background:#e5c4ff;"></span>
+      <span class="swatch-circle" style="background:#b8d4ff;"></span>
+      <span class="swatch-label">薰衣草</span>
+    </button>
+    <button class="theme-swatch" data-theme="cherry" onclick="applyTheme('cherry')" title="樱花">
+      <span class="swatch-circle" style="background:#ffc0cb;"></span>
+      <span class="swatch-circle" style="background:#ffb4a2;"></span>
+      <span class="swatch-label">樱花</span>
+    </button>
+  </div>
+</div>
+</body>
+</html>
