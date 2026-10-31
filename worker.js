@@ -9,6 +9,8 @@ import uploadCss from "./css/upload.css";
 import downloadCss from "./css/download.css";
 import styleCss from "./css/style.css";
 
+const VERSION = "inline-css-1";
+
 const TOKEN_LEN = 16;
 const TOKEN_CHARS =
   "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -22,18 +24,6 @@ function genToken() {
   return out;
 }
 
-const html = (body, status = 200) =>
-  new Response(body, {
-    status,
-    headers: { "content-type": "text/html; charset=utf-8" },
-  });
-
-const json = (obj, status = 200) =>
-  new Response(JSON.stringify(obj), {
-    status,
-    headers: { "content-type": "application/json; charset=utf-8" },
-  });
-
 const CSS = {
   common: commonCss,
   index: indexCss,
@@ -41,6 +31,30 @@ const CSS = {
   download: downloadCss,
   style: styleCss,
 };
+
+// 把 <link rel="stylesheet" href="/css/xxx.css"> 替换成内联 <style>
+function inlineCss(src) {
+  return String(src).replace(
+    /<link\b[^>]*href=["'][^"']*\/css\/([\w-]+)\.css["'][^>]*>/gi,
+    (m, name) =>
+      CSS[name] !== undefined ? "<style>\n" + CSS[name] + "\n</style>" : m
+  );
+}
+
+const html = (body, status = 200) =>
+  new Response(inlineCss(body), {
+    status,
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-cache",
+    },
+  });
+
+const json = (obj, status = 200) =>
+  new Response(JSON.stringify(obj), {
+    status,
+    headers: { "content-type": "application/json; charset=utf-8" },
+  });
 
 const PAGES = {
   "": indexHtml,
@@ -57,49 +71,59 @@ function pageKey(pathname) {
   return p;
 }
 
+// 常驻诊断：只输出打包状态，不涉及 R2、token 或用户数据
+function debugResponse(request, url, env) {
+  const info = (name, v) =>
+    name + ": " + typeof v + " len=" + (v == null ? "null" : String(v).length);
+  const lines = [
+    "worker version: " + VERSION,
+    "",
+    "[bundle]",
+    info("common.css", commonCss),
+    info("index.css", indexCss),
+    info("upload.css", uploadCss),
+    info("download.css", downloadCss),
+    info("style.css", styleCss),
+    info("index.html", indexHtml),
+    info("upload.html", uploadHtml),
+    info("download.html", downloadHtml),
+    info("404.html", error404Html),
+    "",
+    "[binding]",
+    "BUCKET bound: " + (env && env.BUCKET ? "yes" : "no"),
+    "",
+    "[request]",
+    "method: " + request.method,
+    "path: " + url.pathname,
+    "",
+    "[inline test]",
+    "index.html has <link>: " + /<link\b/i.test(String(indexHtml)),
+    "after inline has <style>: " + /<style>/i.test(inlineCss(indexHtml)),
+  ];
+  return new Response(lines.join("\n"), {
+    headers: {
+      "content-type": "text/plain; charset=utf-8",
+      "cache-control": "no-store",
+    },
+  });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     const isGet = request.method === "GET" || request.method === "HEAD";
 
-    // 0. 诊断路由（排查完可删除）
-    if (url.pathname === "/debug") {
-      const info = (name, v) =>
-        name + ": " + typeof v + " len=" + (v == null ? "null" : String(v).length);
-      return new Response(
-        [
-          "worker version: debug-1",
-          info("common", commonCss),
-          info("index", indexCss),
-          info("upload", uploadCss),
-          info("download", downloadCss),
-          info("style", styleCss),
-          info("indexHtml", indexHtml),
-          info("downloadHtml", downloadHtml),
-          "path: " + url.pathname,
-        ].join("\n"),
-        { headers: { "content-type": "text/plain; charset=utf-8" } }
-      );
+    // 诊断
+    if (isGet && url.pathname === "/debug") {
+      return debugResponse(request, url, env);
     }
 
-    // 1. CSS
-    const cssMatch = url.pathname.match(/\/css\/([\w-]+)\.css$/);
-    if (isGet && cssMatch && CSS[cssMatch[1]] !== undefined) {
-      return new Response(CSS[cssMatch[1]], {
-        status: 200,
-        headers: {
-          "content-type": "text/css; charset=utf-8",
-          "cache-control": "no-cache",
-        },
-      });
-    }
-
-    // 2. 上传
+    // 上传
     if (request.method === "POST" && pageKey(url.pathname) === "upload") {
       return handleUpload(request, env);
     }
 
-    // 3. 页面
+    // 页面
     if (isGet) {
       const key = pageKey(url.pathname);
       if (key === "download" && url.searchParams.has("token")) {
@@ -110,14 +134,8 @@ export default {
       }
     }
 
-    // 4. 兜底 404（临时显示请求路径，方便排查）
-    return html(
-      error404Html +
-        "<pre style='color:#fff;background:#222;padding:12px;white-space:pre-wrap'>" +
-        "debug path: " + url.pathname + "\nmethod: " + request.method +
-        "</pre>",
-      404
-    );
+    // 兜底 404
+    return html(error404Html, 404);
   },
 };
 

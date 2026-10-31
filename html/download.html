@@ -4,8 +4,60 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>下载文件 · 一次性文件传输</title>
-<link rel="stylesheet" href="/css/common.css" />
-<link rel="stylesheet" href="/css/download.css" />
+<style>
+  :root {
+    --md-primary: #6750a4;
+    --md-on-primary: #fff;
+    --md-surface: #fef7ff;
+    --md-on-surface: #1d1b20;
+    --md-surface-variant: #e7e0ec;
+    --md-on-surface-variant: #49454f;
+    --md-outline: #79747e;
+    --md-error: #b3261e;
+    --radius-full: 999px;
+    --radius-md: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex;
+    align-items: center; justify-content: center; padding: 24px;
+    background: var(--md-surface); color: var(--md-on-surface);
+    font-family: "Roboto", "Noto Sans SC", system-ui, -apple-system, sans-serif;
+  }
+  .card {
+    width: 100%; max-width: 480px; background: #fff;
+    border-radius: 28px; padding: 32px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.12), 0 4px 12px rgba(0,0,0,.08);
+  }
+  .top { display: flex; align-items: center; margin-bottom: 20px; }
+  a.back { text-decoration: none; color: var(--md-primary); font-size: 14px; padding: 6px 12px; border-radius: var(--radius-full); }
+  a.back:hover { background: rgba(103,80,164,.08); }
+  h1 { font-size: 22px; font-weight: 500; margin: 0 0 8px; }
+  .subtitle { font-size: 14px; color: var(--md-on-surface-variant); margin: 0 0 24px; line-height: 1.5; }
+  label { display: block; font-size: 13px; color: var(--md-on-surface-variant); margin-bottom: 6px; }
+  input[type="text"] {
+    width: 100%; padding: 14px 16px; font-size: 15px; border: 1px solid var(--md-outline);
+    border-radius: var(--radius-md); outline: none; background: #fff; color: var(--md-on-surface);
+    transition: border-color .2s, box-shadow .2s;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    letter-spacing: 1px; margin-bottom: 16px;
+  }
+  input[type="text"]:focus { border-color: var(--md-primary); box-shadow: 0 0 0 3px rgba(103,80,164,.15); }
+  button.primary {
+    position: relative; width: 100%; padding: 14px; border: none;
+    border-radius: var(--radius-full); background: var(--md-primary);
+    color: var(--md-on-primary); font-size: 15px; font-weight: 500;
+    cursor: pointer; overflow: hidden; transition: box-shadow .2s;
+  }
+  button.primary:hover::before, button.primary:active::before { content: ""; position: absolute; inset: 0; background: currentColor; }
+  button.primary:hover::before { opacity: .08; }
+  button.primary:active::before { opacity: .10; }
+  button.primary:disabled { background: var(--md-surface-variant); color: var(--md-on-surface-variant); cursor: not-allowed; }
+  .status { margin-top: 20px; font-size: 14px; line-height: 1.6; word-break: break-all; display: none; }
+  .status.show { display: block; }
+  .status.error { color: var(--md-error); }
+  .hint { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--md-surface-variant); font-size: 13px; color: var(--md-on-surface-variant); line-height: 1.6; }
+</style>
 </head>
 <body>
   <div class="card">
@@ -14,19 +66,9 @@
     <p class="subtitle">输入对方给你的密钥，下载文件（仅一次）。</p>
 
     <label for="tokenInput">下载密钥</label>
-    <input
-      type="text"
-      id="tokenInput"
-      placeholder="16 位字母数字"
-      maxlength="16"
-      autocomplete="off"
-      spellcheck="false"
-    />
-
+    <input type="text" id="tokenInput" placeholder="16 位字母数字" maxlength="16" autocomplete="off" spellcheck="false" />
     <button class="primary" id="downloadBtn" disabled>下载</button>
-
     <div class="status" id="status"></div>
-
     <div class="hint">文件只能下载一次，下载后即从服务器删除。</div>
   </div>
 
@@ -34,28 +76,20 @@
     const tokenInput = document.getElementById("tokenInput");
     const downloadBtn = document.getElementById("downloadBtn");
     const statusEl = document.getElementById("status");
-
     function setStatus(msg, isError = false) {
-      statusEl.textContent = msg;
-      statusEl.classList.add("show");
-      statusEl.classList.toggle("error", isError);
+      statusEl.textContent = msg; statusEl.classList.add("show"); statusEl.classList.toggle("error", isError);
     }
-
     tokenInput.addEventListener("input", () => {
       const v = tokenInput.value.trim();
       downloadBtn.disabled = !/^[A-Za-z0-9]{16}$/.test(v);
       statusEl.classList.remove("show");
     });
-
     downloadBtn.addEventListener("click", async () => {
       const token = tokenInput.value.trim();
       if (!/^[A-Za-z0-9]{16}$/.test(token)) {
-        setStatus("密钥格式不正确（应为 16 位字母数字）", true);
-        return;
+        setStatus("密钥格式不正确（应为 16 位字母数字）", true); return;
       }
-      downloadBtn.disabled = true;
-      setStatus("下载中…");
-
+      downloadBtn.disabled = true; setStatus("下载中…");
       try {
         const res = await fetch(`/download?token=${encodeURIComponent(token)}`);
         if (!res.ok) {
@@ -63,33 +97,24 @@
           const m = text.match(/<h1>(.*?)<\/h1>/);
           throw new Error(m ? m[1] : `下载失败（${res.status}）`);
         }
-
         let filename = "download";
         const cd = res.headers.get("content-disposition") || "";
         const m = cd.match(/filename\*=UTF-8''([^;]+)/);
         if (m) filename = decodeURIComponent(m[1]);
-
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
+        a.href = url; a.download = filename;
+        document.body.appendChild(a); a.click(); a.remove();
         URL.revokeObjectURL(url);
-
         setStatus("下载完成，文件已从服务器删除。");
       } catch (err) {
-        setStatus(err.message, true);
-        downloadBtn.disabled = false;
+        setStatus(err.message, true); downloadBtn.disabled = false;
       }
     });
-
     const urlToken = new URLSearchParams(location.search).get("token");
     if (urlToken && /^[A-Za-z0-9]{16}$/.test(urlToken)) {
-      tokenInput.value = urlToken;
-      downloadBtn.disabled = false;
+      tokenInput.value = urlToken; downloadBtn.disabled = false;
     }
   </script>
 </body>

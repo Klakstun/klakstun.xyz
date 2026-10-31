@@ -4,8 +4,77 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>上传文件 · 一次性文件传输</title>
-<link rel="stylesheet" href="/css/common.css" />
-<link rel="stylesheet" href="/css/upload.css" />
+<style>
+  :root {
+    --md-primary: #6750a4;
+    --md-on-primary: #fff;
+    --md-primary-container: #eaddff;
+    --md-on-primary-container: #21005d;
+    --md-surface: #fef7ff;
+    --md-on-surface: #1d1b20;
+    --md-surface-variant: #e7e0ec;
+    --md-on-surface-variant: #49454f;
+    --md-outline: #79747e;
+    --md-error: #b3261e;
+    --radius-full: 999px;
+    --radius-md: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex;
+    align-items: center; justify-content: center; padding: 24px;
+    background: var(--md-surface); color: var(--md-on-surface);
+    font-family: "Roboto", "Noto Sans SC", system-ui, -apple-system, sans-serif;
+  }
+  .card {
+    width: 100%; max-width: 480px; background: #fff;
+    border-radius: 28px; padding: 32px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.12), 0 4px 12px rgba(0,0,0,.08);
+  }
+  .top { display: flex; align-items: center; margin-bottom: 20px; }
+  a.back { text-decoration: none; color: var(--md-primary); font-size: 14px; padding: 6px 12px; border-radius: var(--radius-full); }
+  a.back:hover { background: rgba(103,80,164,.08); }
+  h1 { font-size: 22px; font-weight: 500; margin: 0 0 8px; }
+  .subtitle { font-size: 14px; color: var(--md-on-surface-variant); margin: 0 0 24px; line-height: 1.5; }
+  .drop-zone {
+    border: 2px dashed var(--md-outline); border-radius: var(--radius-md);
+    padding: 24px; text-align: center; transition: border-color .2s, background .2s; margin-bottom: 20px;
+  }
+  .drop-zone.dragover { border-color: var(--md-primary); background: var(--md-primary-container); }
+  input[type="file"] { width: 100%; font-size: 14px; color: var(--md-on-surface-variant); }
+  input[type="file"]::file-selector-button {
+    margin-right: 12px; padding: 10px 20px; border: none;
+    border-radius: var(--radius-full); background: var(--md-primary-container);
+    color: var(--md-on-primary-container); font-size: 14px; font-weight: 500; cursor: pointer; transition: background .2s;
+  }
+  button.primary {
+    position: relative; width: 100%; padding: 14px; border: none;
+    border-radius: var(--radius-full); background: var(--md-primary);
+    color: var(--md-on-primary); font-size: 15px; font-weight: 500;
+    cursor: pointer; overflow: hidden; transition: box-shadow .2s;
+  }
+  button.primary:hover::before, button.primary:active::before { content: ""; position: absolute; inset: 0; background: currentColor; }
+  button.primary:hover::before { opacity: .08; }
+  button.primary:active::before { opacity: .10; }
+  button.primary:disabled { background: var(--md-surface-variant); color: var(--md-on-surface-variant); cursor: not-allowed; }
+  .status { margin-top: 20px; font-size: 14px; line-height: 1.6; word-break: break-all; display: none; }
+  .status.show { display: block; }
+  .status.error { color: var(--md-error); }
+  .result { margin-top: 20px; display: none; }
+  .result.show { display: block; }
+  .result-label { font-size: 13px; color: var(--md-on-surface-variant); margin-bottom: 6px; }
+  .result-box { display: flex; gap: 8px; align-items: center; }
+  .result-box code {
+    flex: 1; padding: 12px 16px; background: var(--md-surface-variant);
+    border-radius: var(--radius-md); font-size: 14px; color: var(--md-on-surface); overflow-x: auto; white-space: nowrap;
+  }
+  button.copy {
+    padding: 12px 20px; border: 1px solid var(--md-outline); border-radius: var(--radius-full);
+    background: transparent; color: var(--md-primary); font-size: 14px; font-weight: 500; cursor: pointer; white-space: nowrap;
+  }
+  button.copy:hover { background: rgba(103,80,164,.08); }
+  .hint { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--md-surface-variant); font-size: 13px; color: var(--md-on-surface-variant); line-height: 1.6; }
+</style>
 </head>
 <body>
   <div class="card">
@@ -18,7 +87,6 @@
     </div>
 
     <button class="primary" id="uploadBtn" disabled>上传并生成密钥</button>
-
     <div class="status" id="status"></div>
 
     <div class="result" id="result">
@@ -28,7 +96,6 @@
         <button class="copy" id="copyBtn">复制</button>
       </div>
     </div>
-
     <div class="hint">文件只能下载一次，下载后即删除。</div>
   </div>
 
@@ -40,79 +107,45 @@
     const resultEl = document.getElementById("result");
     const tokenText = document.getElementById("tokenText");
     const copyBtn = document.getElementById("copyBtn");
-
     let selectedFile = null;
-
     function setStatus(msg, isError = false) {
-      statusEl.textContent = msg;
-      statusEl.classList.add("show");
-      statusEl.classList.toggle("error", isError);
+      statusEl.textContent = msg; statusEl.classList.add("show"); statusEl.classList.toggle("error", isError);
     }
-
     fileInput.addEventListener("change", () => {
       selectedFile = fileInput.files[0] || null;
       uploadBtn.disabled = !selectedFile;
       statusEl.classList.remove("show");
     });
-
-    ["dragenter", "dragover"].forEach((evt) =>
-      dropZone.addEventListener(evt, (e) => {
-        e.preventDefault();
-        dropZone.classList.add("dragover");
-      })
-    );
-    ["dragleave", "drop"].forEach((evt) =>
-      dropZone.addEventListener(evt, (e) => {
-        e.preventDefault();
-        dropZone.classList.remove("dragover");
-      })
-    );
+    ["dragenter", "dragover"].forEach((evt) => dropZone.addEventListener(evt, (e) => { e.preventDefault(); dropZone.classList.add("dragover"); }));
+    ["dragleave", "drop"].forEach((evt) => dropZone.addEventListener(evt, (e) => { e.preventDefault(); dropZone.classList.remove("dragover"); }));
     dropZone.addEventListener("drop", (e) => {
       const f = e.dataTransfer.files[0];
       if (f) {
-        selectedFile = f;
-        uploadBtn.disabled = false;
-        statusEl.classList.remove("show");
-        const dt = new DataTransfer();
-        dt.items.add(f);
-        fileInput.files = dt.files;
+        selectedFile = f; uploadBtn.disabled = false; statusEl.classList.remove("show");
+        const dt = new DataTransfer(); dt.items.add(f); fileInput.files = dt.files;
       }
     });
-
     uploadBtn.addEventListener("click", async () => {
       if (!selectedFile) return;
-      uploadBtn.disabled = true;
-      resultEl.classList.remove("show");
-      setStatus("上传中…");
-
-      const fd = new FormData();
-      fd.append("file", selectedFile);
-
+      uploadBtn.disabled = true; resultEl.classList.remove("show"); setStatus("上传中…");
+      const fd = new FormData(); fd.append("file", selectedFile);
       try {
         const res = await fetch("/upload", { method: "POST", body: fd });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "上传失败");
-        setStatus("上传成功！");
-        tokenText.textContent = data.token;
-        resultEl.classList.add("show");
+        setStatus("上传成功！"); tokenText.textContent = data.token; resultEl.classList.add("show");
       } catch (err) {
-        setStatus("上传失败：" + err.message, true);
-        uploadBtn.disabled = false;
+        setStatus("上传失败：" + err.message, true); uploadBtn.disabled = false;
       }
     });
-
     copyBtn.addEventListener("click", async () => {
       const token = tokenText.textContent;
       try {
         await navigator.clipboard.writeText(token);
-        copyBtn.textContent = "已复制";
-        setTimeout(() => (copyBtn.textContent = "复制"), 1500);
+        copyBtn.textContent = "已复制"; setTimeout(() => (copyBtn.textContent = "复制"), 1500);
       } catch {
-        const range = document.createRange();
-        range.selectNodeContents(tokenText);
-        const sel = window.getSelection();
-        sel.removeAllRanges();
-        sel.addRange(range);
+        const range = document.createRange(); range.selectNodeContents(tokenText);
+        const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
       }
     });
   </script>
