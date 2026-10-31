@@ -49,8 +49,6 @@ const PAGES = {
   download: downloadHtml,
 };
 
-// 把各种形式的路径统一成页面名：
-// "/" "/index.html" "/html/download.html" "/download" -> "", "index", "download", "download"
 function pageKey(pathname) {
   let p = pathname.replace(/\/+/g, "/");
   if (p.startsWith("/html/")) p = p.slice(5);
@@ -64,7 +62,27 @@ export default {
     const url = new URL(request.url);
     const isGet = request.method === "GET" || request.method === "HEAD";
 
-    // 1. CSS：只要路径以 /css/xxx.css 结尾就返回
+    // 0. 诊断路由（排查完可删除）
+    if (url.pathname === "/debug") {
+      const info = (name, v) =>
+        name + ": " + typeof v + " len=" + (v == null ? "null" : String(v).length);
+      return new Response(
+        [
+          "worker version: debug-1",
+          info("common", commonCss),
+          info("index", indexCss),
+          info("upload", uploadCss),
+          info("download", downloadCss),
+          info("style", styleCss),
+          info("indexHtml", indexHtml),
+          info("downloadHtml", downloadHtml),
+          "path: " + url.pathname,
+        ].join("\n"),
+        { headers: { "content-type": "text/plain; charset=utf-8" } }
+      );
+    }
+
+    // 1. CSS
     const cssMatch = url.pathname.match(/\/css\/([\w-]+)\.css$/);
     if (isGet && cssMatch && CSS[cssMatch[1]] !== undefined) {
       return new Response(CSS[cssMatch[1]], {
@@ -92,8 +110,14 @@ export default {
       }
     }
 
-    // 4. 兜底 404
-    return html(error404Html, 404);
+    // 4. 兜底 404（临时显示请求路径，方便排查）
+    return html(
+      error404Html +
+        "<pre style='color:#fff;background:#222;padding:12px;white-space:pre-wrap'>" +
+        "debug path: " + url.pathname + "\nmethod: " + request.method +
+        "</pre>",
+      404
+    );
   },
 };
 
