@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MIDI Tools</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════
+     顶栏：播放控制 + 参数调节
+     ═══════════════════════════════════════════ -->
+<header>
+  <div class="header-left">
+    <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleLeftSidebar()" title="菜单">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <line x1="3" y1="6" x2="21" y2="6"/>
+        <line x1="3" y1="12" x2="21" y2="12"/>
+        <line x1="3" y1="18" x2="21" y2="18"/>
+      </svg>
+    </button>
+    <div class="logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M9 18V5l12-2v13"/>
+        <circle cx="6" cy="18" r="3" fill="var(--accent)"/>
+        <circle cx="18" cy="16" r="3" fill="var(--accent2)"/>
+      </svg>
+      <span>MIDI</span> <span data-i18n="app.title">工具集</span>
+    </div>
+  </div>
+
+  <div class="header-center">
+    <div class="toolbar-group">
+      <button class="btn primary" id="btnPlay" onclick="midiTogglePlay()" title="播放/暂停 (空格键)" data-i18n="btn.play">▶ 播放</button>
+      <button class="btn" id="btnStop" onclick="midiStop()" disabled data-i18n="btn.stop">⏹ 停止</button>
+      <button class="btn loop-btn" id="btnLoop" onclick="midiToggleLoop()" title="循环播放" data-i18n="btn.loop">🔁 循环</button>
+      <span class="status-indicator ready" id="statusIndicator"></span>
+      <span class="status-text" id="statusText" data-i18n="status.ready">就绪</span>
+    </div>
+    <div class="toolbar-group">
+      <label data-i18n="label.bpm">BPM</label>
+      <input type="number" id="bpmInput" value="120" min="20" max="400" onchange="midiUpdateBPM(this.value)" onkeydown="if(event.key==='Enter')midiUpdateBPM(this.value)">
+      <input type="range" id="bpmSlider" value="120" min="20" max="400" oninput="midiUpdateBPM(this.value)">
+      <span class="value-display" id="bpmDisplay">120</span>
+    </div>
+    <div class="toolbar-group">
+      <label data-i18n="label.baseFreq">基准频率</label>
+      <input type="number" id="baseFreqInput" value="261.63" min="20" max="2000" step="0.01" onchange="midiUpdateBaseFreq(this.value)" onkeydown="if(event.key==='Enter')midiUpdateBaseFreq(this.value)">
+      <span class="value-display" id="baseFreqDisplay">261.6 Hz</span>
+    </div>
+    <div class="toolbar-group">
+      <label data-i18n="label.volume">音量</label>
+      <input type="range" id="volSlider" value="80" min="0" max="100" oninput="midiUpdateVolume(this.value)">
+      <span class="value-display" id="volDisplay">80%</span>
+    </div>
+    <div class="toolbar-group">
+      <label data-i18n="label.waveform">波形</label>
+      <select id="waveSelect" onchange="midiUpdateWaveform(this.value)">
+        <option value="triangle" data-i18n="waveform.triangle">三角波</option>
+        <option value="sine" data-i18n="waveform.sine">正弦波</option>
+        <option value="square" data-i18n="waveform.square">方波</option>
+        <option value="sawtooth" data-i18n="waveform.sawtooth">锯齿波</option>
+      </select>
+    </div>
+    <div class="toolbar-group">
+      <button class="btn btn-sm" onclick="midiImportFile()" data-i18n="btn.import">📂 导入</button>
+      <button class="btn btn-sm" onclick="midiExportFile()" data-i18n="btn.export">💾 导出</button>
+      <button class="btn btn-sm" onclick="midiClearEditor()" data-i18n="btn.clear">清空</button>
+    </div>
+  </div>
+
+  <div class="header-right">
+    <button class="theme-btn" id="modeBtn" onclick="toggleColorMode(event)" title="深浅模式切换">
+      <svg id="modeIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+      </svg>
+    </button>
+    <button class="theme-btn" id="themeBtn" onclick="toggleThemePopup()" title="主题配色">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20V2z" fill="var(--bg-surface)"/></svg>
+    </button>
+    <div class="lang-switch">
+      <button class="lang-btn" data-lang="zh" onclick="setLanguage('zh')">中文</button>
+      <button class="lang-btn active" data-lang="en" onclick="setLanguage('en')">English</button>
+    </div>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════════════
+     主布局：左侧边栏 + 编辑区 + 右侧边栏
+     ═══════════════════════════════════════════ -->
+<div class="app-layout">
+
+  <!-- 左侧可折叠功能列表 -->
+  <div class="left-sidebar" id="leftSidebar">
+    <div class="left-sidebar-inner">
+      <div class="left-sidebar-header">
+        <span data-i18n="left.nav">功能</span>
+      </div>
+      <ul class="left-nav-list">
+        <li class="left-nav-item active" data-tab="midi" onclick="switchMainTab('midi')">
+          <span class="nav-icon">🎵</span>
+          <span data-i18n="tab.midi">MIDI编辑器</span>
+        </li>
+        <li class="left-nav-item" data-tab="dir" onclick="switchMainTab('dir')">
+          <span class="nav-icon">🔊</span>
+          <span data-i18n="tab.audio">音频导出</span>
+        </li>
+        <li class="left-nav-item" data-tab="sstv" onclick="switchMainTab('sstv')">
+          <span class="nav-icon">📝</span>
+          <span data-i18n="tab.sstv">文本转音频</span>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 主内容区域 -->
+  <div class="main-area">
+
+    <!-- ═══════════════════════════════════════════
+         MIDI 编辑器 Tab
+         ═══════════════════════════════════════════ -->
+    <div class="tab-content active" id="tab-midi">
+      <div class="main-container">
+        <div class="editor-wrapper">
+          <div class="gutter" id="gutter"></div>
+          <div class="editor-area" id="editorArea">
+            <div class="highlight-overlay" id="highlightOverlay"></div>
+            <textarea id="editor" data-i18n-placeholder="editor.placeholder" placeholder="在此输入 MIDI 文本，格式：&#10;时值,音高,大小,编号&#10;&#10;例如：&#10;1/1,1/1,10,01&#10;1/1,9/8,10,02&#10;1/1,5/4,10,03&#10;1/1,4/3,10,04"></textarea>
+          </div>
+        </div>
+        <div class="resize-handle" id="resizeHandle"></div>
+        <div class="sidebar" id="rightSidebar">
+          <div class="sidebar-tabs">
+            <button class="sidebar-tab active" data-sidebar-tab="info" onclick="switchSidebarTab('info')" data-i18n="sidebar.info">音符信息</button>
+            <button class="sidebar-tab" data-sidebar-tab="tutorial" onclick="switchSidebarTab('tutorial')" data-i18n="sidebar.tutorial">教程</button>
+            <button class="sidebar-tab" data-sidebar-tab="about" onclick="switchSidebarTab('about')" data-i18n="sidebar.about">作品信息</button>
+          </div>
+
+          <!-- 音符信息面板 -->
+          <div class="sidebar-panel active" id="sidebarPanelInfo">
+            <div class="draggable-block" data-block-id="speed">
+              <div class="drag-handle"><div class="drag-handle-dots"><span></span><span></span></div></div>
+              <h3 data-i18n="sidebar.speed">速度调节</h3>
+              <div class="speed-panel">
+                <div class="speed-row">
+                  <span style="font-size:0.7rem;color:var(--muted)" data-i18n="sidebar.speedRate">倍率</span>
+                  <input type="range" id="speedSlider" value="1" min="0.25" max="4" step="0.05" oninput="midiUpdateSpeed(this.value)">
+                  <span class="speed-val" id="speedVal">1.00x</span>
+                </div>
+                <div class="speed-bpm" id="speedBPM">有效 BPM: 120</div>
+                <div class="speed-presets" style="margin-top:8px;">
+                  <button class="btn" onclick="midiSetSpeedPreset('0.5')">0.5x</button>
+                  <button class="btn" onclick="midiSetSpeedPreset('1')">1x</button>
+                  <button class="btn" onclick="midiSetSpeedPreset('1.5')">1.5x</button>
+                  <button class="btn" onclick="midiSetSpeedPreset('2')">2x</button>
+                </div>
+              </div>
+            </div>
+            <div class="draggable-block" data-block-id="noteinfo">
+              <div class="drag-handle"><div class="drag-handle-dots"><span></span><span></span></div></div>
+              <h3 data-i18n="sidebar.noteInfo">当前音符信息</h3>
+              <div class="note-info-card" id="noteInfoCard">
+                <div class="row"><span class="label" data-i18n="info.labelLine">行号</span><span class="val" id="infoLine">-</span></div>
+                <div class="row"><span class="label" data-i18n="info.labelDurFrac">时值(分数)</span><span class="val" id="infoDurFrac">-</span></div>
+                <div class="row"><span class="label" data-i18n="info.labelDuration">时值(拍)</span><span class="val" id="infoDuration">-</span></div>
+                <div class="row"><span class="label" data-i18n="info.labelPitchFrac">音高(分数)</span><span class="val" id="infoPitchFrac">-</span></div>
+                <div class="row"><span class="label" data-i18n="info.labelPitchSimple">音高(简化)</span><span class="val" id="infoPitchSimple">-</span></div>
+                <div class="row"><span class="label" data-i18n="info.labelFreq">频率</span><span class="val freq" id="infoFreq">-</span></div>
+                <div class="row"><span class="label" data-i18n="info.labelSize">大小(01-10)</span><span class="val" id="infoSize">-</span></div>
+                <div class="row"><span class="label" data-i18n="info.labelId">编号</span><span class="val" id="infoId">-</span></div>
+              </div>
+            </div>
+            <div class="sidebar-stats draggable-block" data-block-id="stats">
+              <div class="drag-handle"><div class="drag-handle-dots"><span></span><span></span></div></div>
+              <span id="noteCount" data-i18n="status.notes">音符: 0</span>
+              <span id="totalDuration" data-i18n="status.total">总时长: 0.0拍</span>
+              <span id="errorCount" style="color:var(--error-color);display:none;"></span>
+            </div>
+          </div>
+
+          <!-- 教程面板 -->
+          <div class="sidebar-panel" id="sidebarPanelTutorial">
+            <div class="draggable-block" data-block-id="format">
+              <div class="drag-handle"><div class="drag-handle-dots"><span></span><span></span></div></div>
+              <h3 data-i18n="sidebar.format">格式说明</h3>
+              <div class="help-box">
+                <p>每行一个音符，逗号分隔四个字段：</p>
+                <p><code>时值</code> 分数格式，默认 <code>1/1</code></p>
+                <p style="font-size:0.7rem;margin-left:8px;"><code>1/1</code>=四分音符 <code>1/2</code>=八分音符 <code>1/8</code>=三十二分音符</p>
+                <p><code>音高</code> 纯分数频率比，不限定律制</p>
+                <p style="font-size:0.7rem;margin-left:8px;"><code>1/1</code>=基准 <code>4/3</code>=纯四度 <code>3/2</code>=纯五度 <code>5/4</code>=大三度</p>
+                <p><code>大小</code> <code>01</code>~<code>10</code>，默认 <code>10</code></p>
+                <p><code>编号</code> 两位数 <code>00</code>~<code>99</code>，默认为空</p>
+                <p style="margin-top:6px;">从上到下依次演奏</p>
+                <p style="margin-top:8px;color:var(--accent2);">和弦语法：<code>{</code> 和 <code>}</code> 各自独占一行，块内音符同时演奏</p>
+                <p style="font-size:0.7rem;margin-left:8px;color:var(--accent2);">基准频率：<code>{R+频率+HZ}</code> 独占一行，影响后续所有音符</p>
+              </div>
+            </div>
+            <div class="draggable-block" data-block-id="shortcuts">
+              <div class="drag-handle"><div class="drag-handle-dots"><span></span><span></span></div></div>
+              <h3 data-i18n="sidebar.shortcuts">快捷键</h3>
+              <div class="help-box">
+                <p><code>Space</code> 播放/暂停</p>
+                <p><code>Escape</code> 停止</p>
+                <p><code>Ctrl+S</code> 导出文件</p>
+              </div>
+            </div>
+            <div class="draggable-block" data-block-id="examples">
+              <div class="drag-handle"><div class="drag-handle-dots"><span></span><span></span></div></div>
+              <h3 data-i18n="sidebar.examples">示例</h3>
+              <div class="help-box" style="display:flex;flex-direction:column;gap:6px;">
+                <button class="btn btn-sm" onclick="midiLoadExample('scale')" data-i18n="btn.scale">纯律音阶</button>
+                <button class="btn btn-sm" onclick="midiLoadExample('melody')" data-i18n="btn.melody">旋律示例</button>
+                <button class="btn btn-sm" onclick="midiLoadExample('chords')" data-i18n="btn.chords">和弦示例</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- ═══════════════════════════════════════
+               作品信息面板
+               以下 5 行注释标记了作者信息区域，
+               你可以在此修改作者、项目名称、版本号等内容：
+               ═══════════════════════════════════════ -->
+          <div class="sidebar-panel" id="sidebarPanelAbout">
+            <div class="draggable-block" data-block-id="project">
+              <div class="drag-handle"><div class="drag-handle-dots"><span></span><span></span></div></div>
+              <h3 data-i18n="about.project">项目信息</h3>
+              <div class="about-card">
+                <!-- ===== 项目信息：修改以下内容 ===== -->
+                <div class="about-row"><span class="about-label" data-i18n="about.name">项目名称</span><span class="about-val">Midi Text Editor</span></div>
+                <!-- ===== 版本信息：修改以下内容 ===== -->
+                <div class="about-row"><span class="about-label" data-i18n="about.version">版本</span><span class="about-val">1.0</span></div>
+                <!-- ===== 许可信息：修改以下内容 ===== -->
+                <div class="about-row"><span class="about-label" data-i18n="about.license">许可</span><span class="about-val">MIT</span></div>
+                <!-- ===== 仓库链接：修改以下内容 ===== -->
+                <div class="about-row"><span class="about-label" data-i18n="about.repo">仓库</span><span class="about-val"><a href="https://github.com/Klakstun/Midi-Text-Editor-1.0" target="_blank" rel="noopener" class="about-link">GitHub</a></span></div>
+                <!-- ===== 源代码入口：修改以下内容 ===== -->
+                <div class="about-row"><span class="about-label" data-i18n="about.source">源代码</span><span class="about-val"><a href="https://github.com/Klakstun/Midi-Text-Editor-1.0" target="_blank" rel="noopener" class="about-link" data-i18n="about.sourceLink">GitHub</a></span></div>
+              </div>
+            </div>
+            <div class="draggable-block" data-block-id="author">
+              <div class="drag-handle"><div class="drag-handle-dots"><span></span><span></span></div></div>
+              <h3 data-i18n="about.author">作者</h3>
+              <div class="about-card">
+                <!-- ===== 作者信息：修改以下内容 ===== -->
+                <div class="about-row"><span class="about-label" data-i18n="about.authorName">作者</span><span class="about-val">Klakstun</span></div>
+                <!-- ===== 署名信息：修改以下内容 ===== -->
+                <div class="about-row"><span class="about-label" data-i18n="about.credit">署名</span><span class="about-val">© 2025 Klakstun</span></div>
+                <!-- ===== 联系方式：修改以下内容 ===== -->
+                <div class="about-row"><span class="about-label" data-i18n="about.contact">联系方式</span><span class="about-val">GitHub Issues</span></div>
+                <!-- ===== 描述信息：修改以下内容 ===== -->
+                <div class="about-row"><span class="about-label" data-i18n="about.desc">描述</span><span class="about-val">纯律 MIDI 文本编辑器</span></div>
+                <!-- ===== 致谢信息：修改以下内容 ===== -->
+                <div class="about-row"><span class="about-label" data-i18n="about.thanks">致谢</span><span class="about-val">所有贡献者</span></div>
+              </div>
+            </div>
+            <div class="draggable-block" data-block-id="advanced">
+              <div class="drag-handle"><div class="drag-handle-dots"><span></span><span></span></div></div>
+              <h3 data-i18n="about.advanced">高级参数</h3>
+              <div class="about-card">
+                <div class="advanced-group-inline">
+                  <label data-i18n="advanced.attack">Attack</label>
+                  <input type="range" id="advAttack" value="20" min="1" max="200" oninput="advancedUpdateParam('attack', this.value)">
+                  <span class="adv-val" id="advAttackVal">0.020</span>
+                </div>
+                <div class="advanced-group-inline">
+                  <label data-i18n="advanced.release">Release</label>
+                  <input type="range" id="advRelease" value="50" min="1" max="300" oninput="advancedUpdateParam('release', this.value)">
+                  <span class="adv-val" id="advReleaseVal">0.050</span>
+                </div>
+                <div class="advanced-group-inline">
+                  <label data-i18n="advanced.sustainLevel">Sustain</label>
+                  <input type="range" id="advSustain" value="70" min="10" max="100" oninput="advancedUpdateParam('sustain', this.value)">
+                  <span class="adv-val" id="advSustainVal">0.70</span>
+                </div>
+                <div class="advanced-group-inline">
+                  <label data-i18n="advanced.harmonic">泛音</label>
+                  <input type="range" id="advHarmonic" value="15" min="0" max="100" oninput="advancedUpdateParam('harmonic', this.value)">
+                  <span class="adv-val" id="advHarmonicVal">0.15</span>
+                </div>
+                <div class="advanced-group-inline">
+                  <label data-i18n="advanced.fadeOut">淡出</label>
+                  <input type="range" id="advFadeOut" value="20" min="0" max="50" oninput="advancedUpdateParam('fadeOut', this.value)">
+                  <span class="adv-val" id="advFadeOutVal">0.20</span>
+                </div>
+                <button class="btn btn-sm" style="margin-top:8px;width:100%;" onclick="advancedResetDefaults()" data-i18n="advanced.reset">恢复默认</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════
+         音频导出 Tab
+         ═══════════════════════════════════════════ -->
+    <div class="tab-content" id="tab-dir">
+      <div class="dir-container">
+        <h1>
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 18V5l12-2v13"/>
+            <circle cx="6" cy="18" r="3" fill="var(--accent)"/>
+            <circle cx="18" cy="16" r="3" fill="var(--accent2)"/>
+          </svg>
+          <span data-i18n="audio.title">音频导出工具</span>
+        </h1>
+        <p class="subtitle" data-i18n="audio.subtitle">将编辑器中的音符导出为 WAV 音频或 MIDI 文件</p>
+
+        <div class="stats show" id="exportStats">
+          <div class="stat-card">
+            <div class="stat-num" id="exportNoteCount">0</div>
+            <div class="stat-label" data-i18n="audio.statNotes">音符数</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num" id="exportTotalBeats">0.0</div>
+            <div class="stat-label" data-i18n="audio.statBeats">总时长(拍)</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num" id="exportBPM">120</div>
+            <div class="stat-label" data-i18n="audio.statBPM">有效 BPM</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num" id="exportDuration">0s</div>
+            <div class="stat-label" data-i18n="audio.statDuration">预计时长</div>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button class="btn primary" id="btnExportWAV" onclick="exportWAV()" data-i18n="audio.exportWAV">🔊 导出 WAV</button>
+          <button class="btn accent2" id="btnExportMIDI" onclick="exportMIDI()" data-i18n="audio.exportMIDI">🎹 导出 MIDI</button>
+          <button class="btn" onclick="audioExportRefresh()" data-i18n="audio.refresh">🔄 刷新</button>
+        </div>
+
+        <div class="options">
+          <span style="color:var(--muted);font-size:0.76rem;" data-i18n="audio.sampleRate">采样率</span>
+          <select id="optSampleRate">
+            <option value="44100">44100 Hz</option>
+            <option value="48000">48000 Hz</option>
+            <option value="96000">96000 Hz</option>
+          </select>
+          <span style="color:var(--muted);font-size:0.76rem;" data-i18n="audio.bitDepth">位深度</span>
+          <select id="optBitDepth">
+            <option value="16">16-bit</option>
+            <option value="24">24-bit</option>
+          </select>
+          <span style="color:var(--muted);font-size:0.76rem;" data-i18n="audio.midiNoteLen">MIDI 音符时长</span>
+          <select id="optMidiNoteLen">
+            <option value="actual" data-i18n="audio.midiNoteLen.actual">实际时值</option>
+            <option value="fixed" data-i18n="audio.midiNoteLen.fixed">固定(八分音符)</option>
+          </select>
+        </div>
+
+        <div class="preview-box show" id="previewBox">
+          <div class="preview-header">
+            <span id="previewTitle">音符预览</span>
+            <span style="font-size:0.7rem;" id="previewCount"></span>
+          </div>
+          <div class="preview-content" id="previewContent"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════
+         SSTV 文本转音频 Tab
+         ═══════════════════════════════════════════ -->
+    <div class="tab-content" id="tab-sstv">
+      <div class="sstv-container">
+        <div class="sstv-editor-section">
+          <label data-i18n="sstv.label">输入文本</label>
+          <textarea id="sstvTextInput" data-i18n-placeholder="sstv.placeholder" placeholder="在此输入要转换的文本...&#10;每两个字符会被编码为一个十六进制字节，映射到 SSTV Robot72 频率范围&#10;例如: Hello World"></textarea>
+        </div>
+
+        <div class="sstv-options">
+          <label data-i18n="sstv.charDuration">字符时长</label>
+          <input type="range" id="sstvDurationSlider" value="100" min="20" max="500" oninput="sstvUpdateDuration(this.value)">
+          <input type="number" id="sstvDurationInput" value="100" min="20" max="500" onchange="sstvUpdateDuration(this.value)">
+          <span class="sstv-val" id="sstvDurationVal">100 ms</span>
+          <label data-i18n="sstv.volume">音量</label>
+          <input type="range" id="sstvVolSlider" value="80" min="0" max="100" oninput="sstvUpdateVolume(this.value)">
+          <span class="sstv-val" id="sstvVolVal">80%</span>
+        </div>
+
+        <div class="sstv-controls">
+          <button class="btn primary" id="sstvBtnPlay" onclick="sstvTogglePlay()" data-i18n="sstv.play">▶ 播放</button>
+          <button class="btn" id="sstvBtnStop" onclick="sstvStopPlayback()" disabled data-i18n="sstv.stop">⏹ 停止</button>
+          <button class="btn accent2" id="sstvBtnExport" onclick="sstvExportWAV()" data-i18n="sstv.export">🔊 导出 WAV</button>
+          <button class="btn" onclick="sstvRefreshHex()" data-i18n="sstv.refresh">🔄 刷新编码</button>
+        </div>
+
+        <div class="sstv-hex-preview" id="sstvHexPreview">
+          <div class="sstv-hex-label" data-i18n="sstv.hexPreview">十六进制编码预览</div>
+          <div id="sstvHexContent"></div>
+        </div>
+
+        <div class="sstv-freq-table" id="sstvFreqTable">
+          <table>
+            <thead data-i18n-html="sstv.table.header">
+              <tr><th>#</th><th>字符</th><th>Hex</th><th>频率 (Hz)</th></tr>
+            </thead>
+            <tbody id="sstvFreqTableBody"></tbody>
+          </table>
+        </div>
+
+        <div class="sstv-info-card" data-i18n-html="sstv.info">
+          <strong>SSTV Robot72 Color 频率映射</strong><br>
+          文本字符 → ASCII/Unicode 编码 → 十六进制 <code>00</code>~<code>FF</code> → 映射到 SSTV 亮度频率范围 <code>1500 Hz</code> (黑) ~ <code>2300 Hz</code> (白)<br>
+          频率计算公式: <code>freq = 1500 + (hexVal / 255) × 800</code>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /main-area -->
+</div><!-- /app-layout -->
+
+<div class="toast" id="toast"></div>
+<input type="file" id="midiFileInput" accept=".txt,.miditxt" style="display:none" onchange="midiHandleFileImport(event)">
+
+<!-- 主题配色弹窗 -->
+<div class="theme-popup" id="themePopup">
+  <div class="theme-popup-header">主题配色</div>
+  <div class="theme-grid">
+    <button class="theme-swatch" data-theme="default" onclick="applyTheme('default')" title="默认紫粉">
+      <span class="swatch-circle" style="background:#d0bcff;"></span>
+      <span class="swatch-circle" style="background:#efb8c8;"></span>
+      <span class="swatch-label">默认</span>
+    </button>
+    <button class="theme-swatch" data-theme="ocean" onclick="applyTheme('ocean')" title="海洋蓝">
+      <span class="swatch-circle" style="background:#b3d4ff;"></span>
+      <span class="swatch-circle" style="background:#7dd3c0;"></span>
+      <span class="swatch-label">海洋</span>
+    </button>
+    <button class="theme-swatch" data-theme="forest" onclick="applyTheme('forest')" title="森林绿">
+      <span class="swatch-circle" style="background:#b8f0b8;"></span>
+      <span class="swatch-circle" style="background:#ffd470;"></span>
+      <span class="swatch-label">森林</span>
+    </button>
+    <button class="theme-swatch" data-theme="sunset" onclick="applyTheme('sunset')" title="日落橙">
+      <span class="swatch-circle" style="background:#ffb4a2;"></span>
+      <span class="swatch-circle" style="background:#ffd470;"></span>
+      <span class="swatch-label">日落</span>
+    </button>
+    <button class="theme-swatch" data-theme="lavender" onclick="applyTheme('lavender')" title="薰衣草">
+      <span class="swatch-circle" style="background:#e5c4ff;"></span>
+      <span class="swatch-circle" style="background:#b8d4ff;"></span>
+      <span class="swatch-label">薰衣草</span>
+    </button>
+    <button class="theme-swatch" data-theme="cherry" onclick="applyTheme('cherry')" title="樱花">
+      <span class="swatch-circle" style="background:#ffc0cb;"></span>
+      <span class="swatch-circle" style="background:#ffb4a2;"></span>
+      <span class="swatch-label">樱花</span>
+    </button>
+  </div>
+</div>
+
+<script src="js/i18n.js?v=2"></script>
+<script src="js/ui.js?v=2"></script>
+<script src="js/sstv.js?v=2"></script>
+<script src="js/midi.js?v=2"></script>
+<script src="js/export.js?v=2"></script>
+<script src="js/drag.js?v=2"></script>
+<script>
+  // Ensure i18n is applied after all scripts and DOM mutations
+  setTimeout(function() {
+    if (window.setLanguage) {
+      var lang = localStorage.getItem('midi-tools-lang') || 'en';
+      window.setLanguage(lang);
+    }
+  }, 100);
+</script>
+
+<!-- 主题配色 + 深浅模式系统（内联，避免预览器缓存拦截） -->
+<script>
+(function() {
+  'use strict';
+  var themes = {
+    default: {
+      dark:  {accent:'#c4b0f7',accent2:'#f2b5cc',accentOn:'#2a1b4d',accent2On:'#4d1d2e',accentSoft:'#3d3260',accent2Soft:'#543843',accentSoftText:'#d7ccff',accent2SoftText:'#ffd6e2'},
+      light: {accent:'#6b52c4',accent2:'#c94e6e',accentOn:'#ffffff',accent2On:'#ffffff',accentSoft:'#e8e3ff',accent2Soft:'#ffe8f0',accentSoftText:'#3d2866',accent2SoftText:'#5c1a30'}
+    },
+    ocean: {
+      dark:  {accent:'#b3d4ff',accent2:'#7dd3c0',accentOn:'#003258',accent2On:'#00382c',accentSoft:'#234564',accent2Soft:'#234a44',accentSoftText:'#d4e4ff',accent2SoftText:'#a0f0dc'},
+      light: {accent:'#3a6fb5',accent2:'#2d8a70',accentOn:'#ffffff',accent2On:'#ffffff',accentSoft:'#d4e8ff',accent2Soft:'#d4f4ec',accentSoftText:'#1a3a5c',accent2SoftText:'#1a3a30'}
+    },
+    forest: {
+      dark:  {accent:'#b8f0b8',accent2:'#ffd470',accentOn:'#002108',accent2On:'#261900',accentSoft:'#1e3a22',accent2Soft:'#3d3420',accentSoftText:'#d4ffd4',accent2SoftText:'#ffe08a'},
+      light: {accent:'#3d8a3d',accent2:'#b88820',accentOn:'#ffffff',accent2On:'#ffffff',accentSoft:'#d4f4d4',accent2Soft:'#fff4d4',accentSoftText:'#1a3a1a',accent2SoftText:'#3d2a10'}
+    },
+    sunset: {
+      dark:  {accent:'#ffb4a2',accent2:'#ffd470',accentOn:'#561e0d',accent2On:'#261900',accentSoft:'#4a2c20',accent2Soft:'#3d3420',accentSoftText:'#ffdbd4',accent2SoftText:'#ffe08a'},
+      light: {accent:'#c9604a',accent2:'#b88820',accentOn:'#ffffff',accent2On:'#ffffff',accentSoft:'#ffe8e0',accent2Soft:'#fff4d4',accentSoftText:'#4a1a10',accent2SoftText:'#3d2a10'}
+    },
+    lavender: {
+      dark:  {accent:'#e5c4ff',accent2:'#b8d4ff',accentOn:'#3d1f6e',accent2On:'#002a4a',accentSoft:'#453560',accent2Soft:'#243a54',accentSoftText:'#f2ddff',accent2SoftText:'#d4e4ff'},
+      light: {accent:'#7b52b5',accent2:'#4a7fbf',accentOn:'#ffffff',accent2On:'#ffffff',accentSoft:'#f0e4ff',accent2Soft:'#e0ecff',accentSoftText:'#3a2060',accent2SoftText:'#1a3050'}
+    },
+    cherry: {
+      dark:  {accent:'#ffc0cb',accent2:'#ffb4a2',accentOn:'#581a26',accent2On:'#561e0d',accentSoft:'#52303a',accent2Soft:'#4a2c20',accentSoftText:'#ffd9e0',accent2SoftText:'#ffdbd4'},
+      light: {accent:'#c95a6a',accent2:'#c9604a',accentOn:'#ffffff',accent2On:'#ffffff',accentSoft:'#ffe0e8',accent2Soft:'#ffe8e0',accentSoftText:'#4a1a28',accent2SoftText:'#4a1a10'}
+    }
+  };
+
+  window.applyTheme = function(name) {
+    var t = themes[name] || themes['default'];
+    var isLight = document.body.classList.contains('light-mode');
+    var c = isLight ? (t.light || t.dark) : t.dark;
+    var root = document.documentElement;
+    root.style.setProperty('--accent', c.accent);
+    root.style.setProperty('--accent-on', c.accentOn);
+    root.style.setProperty('--accent-soft', c.accentSoft);
+    root.style.setProperty('--accent-soft-text', c.accentSoftText);
+    root.style.setProperty('--accent2', c.accent2);
+    root.style.setProperty('--accent2-on', c.accent2On);
+    root.style.setProperty('--accent2-soft', c.accent2Soft);
+    root.style.setProperty('--accent2-soft-text', c.accent2SoftText);
+    localStorage.setItem('midi-tools-theme', name);
+    var popup = document.getElementById('themePopup');
+    if (popup) popup.classList.remove('show');
+    var swatches = document.querySelectorAll('.theme-swatch');
+    for (var i = 0; i < swatches.length; i++) {
+      swatches[i].classList.toggle('active', swatches[i].getAttribute('data-theme') === name);
+    }
+  };
+
+  window.toggleThemePopup = function() {
+    var popup = document.getElementById('themePopup');
+    if (popup) popup.classList.toggle('show');
+  };
+
+  // Close popup when clicking outside
+  document.addEventListener('click', function(e) {
+    var popup = document.getElementById('themePopup');
+    var btn = document.getElementById('themeBtn');
+    if (popup && btn && popup.classList.contains('show') && !popup.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
+      popup.classList.remove('show');
+    }
+  });
+
+  // ── 深浅模式切换（扩散过渡动画） ──
+  window.toggleColorMode = function(e) {
+    var body = document.body;
+    var isLight = body.classList.contains('light-mode');
+    var x, y;
+
+    if (e) {
+      x = e.clientX; y = e.clientY;
+    } else {
+      x = window.innerWidth / 2; y = window.innerHeight / 2;
+    }
+
+    var doToggle = function() {
+      if (isLight) {
+        body.classList.remove('light-mode');
+        localStorage.setItem('midi-tools-color-mode', 'dark');
+      } else {
+        body.classList.add('light-mode');
+        localStorage.setItem('midi-tools-color-mode', 'light');
+      }
+      updateModeIcon();
+      var savedTheme = localStorage.getItem('midi-tools-theme') || 'default';
+      window.applyTheme(savedTheme);
+    };
+
+    if (!document.startViewTransition) {
+      doToggle();
+      return;
+    }
+
+    body.style.setProperty('--vt-x', x + 'px');
+    body.style.setProperty('--vt-y', y + 'px');
+
+    var vt = document.startViewTransition(function() { doToggle(); });
+  };
+
+  function updateModeIcon() {
+    var icon = document.getElementById('modeIcon');
+    if (!icon) return;
+    var isLight = document.body.classList.contains('light-mode');
+    icon.innerHTML = isLight
+      ? '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>'
+      : '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+  }
+
+  // Load saved color mode
+  var savedMode = localStorage.getItem('midi-tools-color-mode');
+  if (savedMode === 'light') {
+    document.body.classList.add('light-mode');
+  }
+  updateModeIcon();
+
+  // Load saved theme
+  var savedTheme = localStorage.getItem('midi-tools-theme') || 'default';
+  window.applyTheme(savedTheme);
+})();
+</script>
+
+</body>
+</html>
