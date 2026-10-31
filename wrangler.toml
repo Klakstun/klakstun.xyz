@@ -11,3 +11,7 @@ preview_bucket_name = "r1-01"
 type = "Text"
 globs = ["html/*.html", "css/*.css", "error/*.html"]
 fallthrough = true
+
+[observability]
+enabled = true
+head_sampling_rate = 1
