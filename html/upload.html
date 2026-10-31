@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>上传文件 · 一次性文件传输</title>
+<link rel="stylesheet" href="/css/common.css" />
+<link rel="stylesheet" href="/css/upload.css" />
+</head>
+<body>
+  <div class="card">
+    <div class="top"><a class="back" href="/">← 返回</a></div>
+    <h1>上传文件</h1>
+    <p class="subtitle">选择文件，生成一次性下载密钥。</p>
+
+    <div class="drop-zone" id="dropZone">
+      <input type="file" id="fileInput" />
+    </div>
+
+    <button class="primary" id="uploadBtn" disabled>上传并生成密钥</button>
+
+    <div class="status" id="status"></div>
+
+    <div class="result" id="result">
+      <div class="result-label">下载密钥（发送给对方）</div>
+      <div class="result-box">
+        <code id="tokenText"></code>
+        <button class="copy" id="copyBtn">复制</button>
+      </div>
+    </div>
+
+    <div class="hint">文件只能下载一次，下载后即删除。</div>
+  </div>
+
+  <script src="/js/upload.js"></script>
+</body>
+</html>

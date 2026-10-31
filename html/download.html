@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>下载文件 · 一次性文件传输</title>
+<link rel="stylesheet" href="/css/common.css" />
+<link rel="stylesheet" href="/css/download.css" />
+</head>
+<body>
+  <div class="card">
+    <div class="top"><a class="back" href="/">← 返回</a></div>
+    <h1>下载文件</h1>
+    <p class="subtitle">输入对方给你的密钥，下载文件（仅一次）。</p>
+
+    <label for="tokenInput">下载密钥</label>
+    <input
+      type="text"
+      id="tokenInput"
+      placeholder="16 位字母数字"
+      maxlength="16"
+      autocomplete="off"
+      spellcheck="false"
+    />
+
+    <button class="primary" id="downloadBtn" disabled>下载</button>
+
+    <div class="status" id="status"></div>
+
+    <div class="hint">文件只能下载一次，下载后即从服务器删除。</div>
+  </div>
+
+  <script src="/js/download.js"></script>
+</body>
+</html>
