@@ -1,6 +1,7 @@
 import indexHtml from "./html/index.html";
 import uploadHtml from "./html/upload.html";
 import downloadHtml from "./html/download.html";
+import error404Html from "./error/404.html";
 
 import commonCss from "./css/common.css";
 import indexCss from "./css/index.css";
@@ -75,7 +76,8 @@ export default {
       return handleUpload(request, env);
     }
 
-    return new Response("Not Found", { status: 404 });
+    // 找不到路由，返回自定义的 404 页面
+    return html(error404Html, 404);
   },
 };
 
