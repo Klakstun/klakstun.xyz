@@ -1,12 +1,13 @@
-name = "one-shot-file"
+name = "klakstunxyz"
 main = "worker.js"
 compatibility_date = "2024-09-23"
 
 [[r2_buckets]]
 binding = "BUCKET"
-bucket_name = "one-shot-file"
+bucket_name = "r1-01"
+preview_bucket_name = "r1-01"
 
 [[rules]]
 type = "Text"
-globs = ["html/*.html", "css/*.css", "js/*.js"]
+globs = ["html/*.html", "css/*.css", "js/*.js", "error/*.html"]
 fallthrough = true
