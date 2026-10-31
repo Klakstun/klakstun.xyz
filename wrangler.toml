@@ -9,5 +9,5 @@ preview_bucket_name = "r1-01"
 
 [[rules]]
 type = "Text"
-globs = ["html/*.html", "css/*.css", "js/*.js", "error/*.html"]
+globs = ["html/*.html", "css/*.css", "error/*.html"]
 fallthrough = true

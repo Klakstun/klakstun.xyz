@@ -8,8 +8,9 @@ import indexCss from "./css/index.css";
 import uploadCss from "./css/upload.css";
 import downloadCss from "./css/download.css";
 
-import uploadJs from "./js/upload.js";
-import downloadJs from "./js/download.js";
+// 关键改动：给 js 加上 ?raw 后缀，告诉打包器作为纯文本读取，不要执行它
+import uploadJs from "./js/upload.js?raw";
+import downloadJs from "./js/download.js?raw";
 
 const TOKEN_LEN = 16;
 const TOKEN_CHARS =
@@ -76,7 +77,6 @@ export default {
       return handleUpload(request, env);
     }
 
-    // 找不到路由，返回自定义的 404 页面
     return html(error404Html, 404);
   },
 };
