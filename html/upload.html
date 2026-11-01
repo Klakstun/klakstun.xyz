@@ -101,7 +101,7 @@
     border-radius: var(--radius-md);
     font-size: 13px;
     color: var(--md-on-surface-variant);
-    overflow: hidden; /* 防止展开时溢出外部圆角 */
+    overflow: hidden;
   }
   .api-toggle {
     width: 100%;
@@ -126,7 +126,6 @@
     transform: rotate(180deg);
   }
   
-  /* 利用 Grid 实现平滑高度动画 */
   .api-wrapper {
     display: grid;
     grid-template-rows: 0fr;
@@ -198,7 +197,7 @@
     
     <div class="hint">下载次数用完，或超过所选保留时间，文件都会自动从服务器删除。文件以明文保存在服务器上，请勿上传高度敏感的内容。</div>
     
-    <!-- 修改：AI 接口说明，使用 div 和 button 代替 details -->
+    <!-- 修改：更新为 2.0 版本的 API 说明 -->
     <div class="api-doc" id="apiDoc">
       <button class="api-toggle" id="apiToggleBtn">
         AI / 开发者 API 接口说明
@@ -207,15 +206,19 @@
       <div class="api-wrapper">
         <div class="api-content">
           <div class="api-content-inner">
-            <p>发送纯文本 JSON 即可直接生成文件（默认保留 24 小时，可下载 10 次）。</p>
+            <p><strong>公共接口：</strong>支持任意内容字符串，限制最大 2MB，过期时间 1 小时，仅限下载 1 次。</p>
+            <p><strong>特权接口：</strong>在 Header 中带上 <code>Authorization: Bearer ADMIN_TOKEN</code>，可自定义类型、保留时间和下载次数（最高 7 天）。</p>
             <p><strong>Endpoint:</strong> <code>POST /api/upload</code></p>
             
             <p><strong>Request JSON:</strong></p>
             <div class="code-wrapper">
               <button class="copy-code-btn">复制</button>
               <pre>{
-  "text": "文件的实际内容...",
-  "filename": "ai_output.txt"
+  "text": "文件内容或 Base64 数据",
+  "filename": "output.txt",
+  "type": "text/plain",
+  "ttlHours": 168,
+  "maxDownloads": 5
 }</pre>
             </div>
 
@@ -237,7 +240,6 @@
   </div>
 
   <script>
-    // --- 原有 JS 逻辑完全不变 ---
     const fileInput = document.getElementById("fileInput");
     const dropZone = document.getElementById("dropZone");
     const uploadBtn = document.getElementById("uploadBtn");
@@ -327,12 +329,10 @@
       }
     });
 
-    // 新增：点击切换折叠面板的类名
     document.getElementById("apiToggleBtn").addEventListener("click", () => {
       document.getElementById("apiDoc").classList.toggle("open");
     });
 
-    // 处理代码块的一键复制逻辑
     document.querySelectorAll('.copy-code-btn').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         const pre = e.target.nextElementSibling;
