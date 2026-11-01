@@ -83,28 +83,17 @@
   .ver { margin-top: 8px; font-size: 11px; color: var(--md-outline); }
 
   /* 修复文件选择按钮样式 */
-  .drop-zone input[type="file"] {
-    width: 100%;
-    font-size: 14px;
-    color: var(--md-on-surface-variant);
-  }
+  .drop-zone input[type="file"] { width: 100%; font-size: 14px; color: var(--md-on-surface-variant); }
   .drop-zone input[type="file"]::file-selector-button {
-    margin-right: 12px;
-    padding: 10px 20px;
-    border: none;
-    border-radius: var(--radius-full);
-    background: var(--md-primary-container);
-    color: var(--md-on-primary-container);
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background .2s;
+    margin-right: 12px; padding: 10px 20px; border: none;
+    border-radius: var(--radius-full); background: var(--md-primary-container);
+    color: var(--md-on-primary-container); font-size: 14px; font-weight: 500; cursor: pointer; transition: background .2s;
   }
   .drop-zone input[type="file"]::file-selector-button:hover {
     background: color-mix(in srgb, var(--md-primary-container) 92%, var(--md-primary));
   }
 
-  /* AI 接口说明折叠面板样式 */
+  /* 修复跳动问题的纯 CSS 折叠面板 */
   .api-doc {
     margin-top: 16px;
     background: var(--md-surface);
@@ -112,54 +101,63 @@
     border-radius: var(--radius-md);
     font-size: 13px;
     color: var(--md-on-surface-variant);
+    overflow: hidden; /* 防止展开时溢出外部圆角 */
   }
-  .api-doc summary {
+  .api-toggle {
+    width: 100%;
+    text-align: left;
     padding: 12px 16px;
-    cursor: pointer;
     font-weight: 500;
     color: var(--md-primary);
+    background: transparent;
+    border: none;
+    font-size: 13px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     outline: none;
-    user-select: none;
   }
-  .api-doc .api-content {
+  .toggle-icon {
+    transition: transform 0.3s ease;
+    font-size: 10px;
+  }
+  .api-doc.open .toggle-icon {
+    transform: rotate(180deg);
+  }
+  
+  /* 利用 Grid 实现平滑高度动画 */
+  .api-wrapper {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.3s ease-out;
+  }
+  .api-doc.open .api-wrapper {
+    grid-template-rows: 1fr;
+  }
+  .api-content {
+    overflow: hidden;
+  }
+  .api-content-inner {
     padding: 0 16px 16px;
     line-height: 1.6;
   }
 
   /* 去边框的纯色代码块样式 */
-  .code-wrapper {
-    position: relative;
-    margin: 12px 0;
-  }
+  .code-wrapper { position: relative; margin: 12px 0; }
   .code-wrapper pre {
     background: var(--md-surface-variant);
     padding: 32px 12px 12px 12px;
-    border-radius: 12px; /* 圆角大一点 */
-    border: none; /* 去除了黑色描边 */
-    overflow-x: auto;
+    border-radius: 12px; border: none; overflow-x: auto;
     font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-    font-size: 12px;
-    color: var(--md-on-surface);
-    margin: 0;
+    font-size: 12px; color: var(--md-on-surface); margin: 0;
   }
   .copy-code-btn {
-    position: absolute;
-    top: 6px;
-    right: 6px;
-    padding: 4px 10px;
-    font-size: 11px;
-    background: transparent; /* 透明背景 */
-    border: none; /* 去掉按钮边框 */
-    border-radius: 6px;
-    color: var(--md-on-surface-variant); /* 融入背景的颜色 */
-    cursor: pointer;
-    transition: background 0.2s, color 0.2s;
-    font-weight: 500;
+    position: absolute; top: 6px; right: 6px; padding: 4px 10px;
+    font-size: 11px; background: transparent; border: none; border-radius: 6px;
+    color: var(--md-on-surface-variant); cursor: pointer; transition: background 0.2s, color 0.2s; font-weight: 500;
   }
-  .copy-code-btn:hover {
-    background: rgba(0, 0, 0, 0.05); /* 悬停时仅有微弱底色 */
-    color: var(--md-primary);
-  }
+  .copy-code-btn:hover { background: rgba(0, 0, 0, 0.05); color: var(--md-primary); }
 </style>
 </head>
 <body>
@@ -200,38 +198,46 @@
     
     <div class="hint">下载次数用完，或超过所选保留时间，文件都会自动从服务器删除。文件以明文保存在服务器上，请勿上传高度敏感的内容。</div>
     
-    <!-- AI 接口说明折叠面板 -->
-    <details class="api-doc">
-      <summary>AI / 开发者 API 接口说明</summary>
-      <div class="api-content">
-        <p>发送纯文本 JSON 即可直接生成文件（默认保留 24 小时，可下载 10 次）。</p>
-        <p><strong>Endpoint:</strong> <code>POST /api/upload</code></p>
-        
-        <p><strong>Request JSON:</strong></p>
-        <div class="code-wrapper">
-          <button class="copy-code-btn">复制</button>
-          <pre>{
+    <!-- 修改：AI 接口说明，使用 div 和 button 代替 details -->
+    <div class="api-doc" id="apiDoc">
+      <button class="api-toggle" id="apiToggleBtn">
+        AI / 开发者 API 接口说明
+        <span class="toggle-icon">▼</span>
+      </button>
+      <div class="api-wrapper">
+        <div class="api-content">
+          <div class="api-content-inner">
+            <p>发送纯文本 JSON 即可直接生成文件（默认保留 24 小时，可下载 10 次）。</p>
+            <p><strong>Endpoint:</strong> <code>POST /api/upload</code></p>
+            
+            <p><strong>Request JSON:</strong></p>
+            <div class="code-wrapper">
+              <button class="copy-code-btn">复制</button>
+              <pre>{
   "text": "文件的实际内容...",
   "filename": "ai_output.txt"
 }</pre>
-        </div>
+            </div>
 
-        <p><strong>Response JSON:</strong></p>
-        <div class="code-wrapper">
-          <button class="copy-code-btn">复制</button>
-          <pre>{
+            <p><strong>Response JSON:</strong></p>
+            <div class="code-wrapper">
+              <button class="copy-code-btn">复制</button>
+              <pre>{
   "success": true,
   "token": "a1b2c3...",
   "downloadUrl": "https://.../download?token=..."
 }</pre>
+            </div>
+          </div>
         </div>
       </div>
-    </details>
+    </div>
 
     <div class="ver">页面版本 count-2</div>
   </div>
 
   <script>
+    // --- 原有 JS 逻辑完全不变 ---
     const fileInput = document.getElementById("fileInput");
     const dropZone = document.getElementById("dropZone");
     const uploadBtn = document.getElementById("uploadBtn");
@@ -246,7 +252,6 @@
     const expireText = document.getElementById("expireText");
     let selectedFile = null;
 
-    // 1~24 档 = 1~24 小时；25~30 档 = 2~7 天
     function hoursFor(step) {
       step = Number(step);
       return step <= 24 ? step : (step - 23) * 24;
@@ -322,7 +327,12 @@
       }
     });
 
-    // 新增：处理代码块的一键复制逻辑
+    // 新增：点击切换折叠面板的类名
+    document.getElementById("apiToggleBtn").addEventListener("click", () => {
+      document.getElementById("apiDoc").classList.toggle("open");
+    });
+
+    // 处理代码块的一键复制逻辑
     document.querySelectorAll('.copy-code-btn').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         const pre = e.target.nextElementSibling;
