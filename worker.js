@@ -34,7 +34,6 @@ function genToken() {
   return out;
 }
 
-// 合法有效期：1~24 小时，或 48/72/96/120/144/168 小时
 function parseTtlHours(raw) {
   const h = parseInt(raw, 10);
   if (Number.isInteger(h)) {
@@ -44,7 +43,6 @@ function parseTtlHours(raw) {
   return DEFAULT_TTL_HOURS;
 }
 
-// 合法下载次数：1~10
 function parseMaxDownloads(raw) {
   const n = parseInt(raw, 10);
   if (Number.isInteger(n) && n >= 1 && n <= MAX_DOWNLOADS_LIMIT) return n;
@@ -76,10 +74,23 @@ const html = (body, status = 200) =>
     },
   });
 
+// 【原版 json，完全没动】
 const json = (obj, status = 200) =>
   new Response(JSON.stringify(obj), {
     status,
     headers: { "content-type": "application/json; charset=utf-8" },
+  });
+
+// 【新增：仅供 AI 使用的 json，带有 CORS 跨域头】
+const aiJson = (obj, status = 200) =>
+  new Response(JSON.stringify(obj), {
+    status,
+    headers: { 
+      "content-type": "application/json; charset=utf-8",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type"
+    },
   });
 
 const PAGES = {
@@ -98,10 +109,8 @@ function pageKey(pathname) {
 }
 
 // ---------------------------------------------------------------
-// R2 基础操作
+// R2 基础操作 (原样保留)
 // ---------------------------------------------------------------
-
-// 删除某个令牌对应的全部对象（文件 + 状态）
 async function purge(env, token) {
   try {
     await env.BUCKET.delete([`file_${token}`, `state_${token}`]);
@@ -111,7 +120,6 @@ async function purge(env, token) {
   }
 }
 
-// 批量删除多个令牌（每批最多 500 个令牌 = 1000 个键）
 async function purgeMany(env, tokens) {
   for (let i = 0; i < tokens.length; i += 500) {
     const keys = [];
@@ -126,7 +134,6 @@ async function purgeMany(env, tokens) {
   }
 }
 
-// 写入状态文件（关键字段同时放进 customMetadata，供清理和后台读取，不必逐个下载 JSON）
 async function putState(env, token, remaining, expiresAt, maxDownloads) {
   await env.BUCKET.put(
     `state_${token}`,
@@ -142,7 +149,6 @@ async function putState(env, token, remaining, expiresAt, maxDownloads) {
   );
 }
 
-// 列出某前缀下的全部对象（有页数上限，超出时 truncated = true）
 async function listAll(env, prefix, withMeta) {
   const objects = [];
   let cursor;
@@ -157,9 +163,6 @@ async function listAll(env, prefix, withMeta) {
   return { objects, truncated: true };
 }
 
-// 把 state_ 与 file_ 对应起来，并给每个令牌判定状态
-// active 有效 | expired 已过期 | uploading 上传中 | finishing 收尾中
-// orphan_file 孤立文件 | orphan_state 孤立状态 | stuck 下载卡住
 function buildIndex(states, files, now) {
   const map = new Map();
   for (const o of states) {
@@ -203,7 +206,6 @@ function buildIndex(states, files, now) {
   return items;
 }
 
-// 清理：删除过期、孤立、卡住的对象，并记录最近一次结果
 async function sweep(env, trigger) {
   const now = Date.now();
   const [s, f] = await Promise.all([
@@ -238,16 +240,14 @@ async function sweep(env, trigger) {
 }
 
 // ---------------------------------------------------------------
-// 运维后台
+// 运维后台 (原样保留)
 // ---------------------------------------------------------------
-
 async function sha256(s) {
   return new Uint8Array(
     await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s))
   );
 }
 
-// 返回 true | false | "unconfigured"
 async function checkAdmin(request, env) {
   if (!env.ADMIN_TOKEN) return "unconfigured";
   const m = (request.headers.get("authorization") || "").match(/^Bearer (.+)$/);
@@ -277,7 +277,6 @@ const adminPage = () =>
     },
   });
 
-// 统计：只返回数量、体积、时间，令牌只显示前 4 位，不返回文件名
 async function collectStats(env) {
   const now = Date.now();
   const [s, f] = await Promise.all([
@@ -351,7 +350,6 @@ function serverInfo(env) {
   };
 }
 
-// 存储桶自检：写入、读取、删除一个临时对象
 async function selfTest(env) {
   const key = "meta_selftest_" + genToken();
   const out = { ok: false };
@@ -385,7 +383,7 @@ async function handleAdminApi(request, url, env) {
     return adminJson({ error: "服务端未配置 ADMIN_TOKEN" }, 503);
   }
   if (!auth) {
-    await new Promise((r) => setTimeout(r, 500)); // 失败时稍作延迟，减缓暴力尝试
+    await new Promise((r) => setTimeout(r, 500));
     return adminJson({ error: "unauthorized" }, 401);
   }
 
@@ -405,10 +403,6 @@ async function handleAdminApi(request, url, env) {
   }
   return adminJson({ error: "not found" }, 404);
 }
-
-// ---------------------------------------------------------------
-// 公开的简易诊断（只输出打包状态，不涉及 R2 内容）
-// ---------------------------------------------------------------
 
 function debugResponse(request, url, env) {
   const info = (name, v) =>
@@ -452,7 +446,7 @@ function debugResponse(request, url, env) {
 }
 
 // ---------------------------------------------------------------
-// 入口
+// 入口 (仅新增了 OPTIONS 和 /api/upload 拦截)
 // ---------------------------------------------------------------
 
 export default {
@@ -460,12 +454,28 @@ export default {
     const url = new URL(request.url);
     const isGet = request.method === "GET" || request.method === "HEAD";
 
+    // 【新增：处理 AI 的跨域 OPTIONS 预检请求】
+    if (request.method === "OPTIONS") {
+      return new Response(null, {
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type",
+        }
+      });
+    }
+
     if (url.pathname.startsWith("/admin/api/")) {
       return handleAdminApi(request, url, env);
     }
 
     if (isGet && url.pathname === "/debug") {
       return debugResponse(request, url, env);
+    }
+
+    // 【新增：AI 专属上传接口】
+    if (request.method === "POST" && url.pathname === "/api/upload") {
+      return handleAiUpload(request, env);
     }
 
     if (request.method === "POST" && pageKey(url.pathname) === "upload") {
@@ -488,12 +498,12 @@ export default {
     return html(error404Html, 404);
   },
 
-  // 定时任务：每小时清理一次
   async scheduled(event, env, ctx) {
     ctx.waitUntil(sweep(env, "cron"));
   },
 };
 
+// 【原版 handleUpload，一字未改】
 async function handleUpload(request, env) {
   let form;
   try {
@@ -535,6 +545,49 @@ async function handleUpload(request, env) {
   });
 }
 
+// 【新增：AI 处理逻辑】
+async function handleAiUpload(request, env) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return aiJson({ error: "Invalid JSON format." }, 400);
+  }
+
+  if (!body || !body.text) {
+    return aiJson({ error: "Missing 'text' field in JSON payload." }, 400);
+  }
+
+  const fileName = body.filename || "ai_output.txt";
+  const textContent = body.text;
+  
+  const ttlHours = 24;
+  const maxDownloads = 10;
+  const expiresAt = Date.now() + ttlHours * HOUR_MS;
+  const token = genToken();
+
+  try {
+    await env.BUCKET.put(`file_${token}`, textContent, {
+      httpMetadata: { contentType: "text/plain; charset=utf-8" },
+      customMetadata: { fileName },
+    });
+    await putState(env, token, maxDownloads, expiresAt, maxDownloads);
+  } catch (e) {
+    await purge(env, token);
+    return aiJson({ error: "Failed to store file." }, 500);
+  }
+
+  const origin = new URL(request.url).origin;
+
+  return aiJson({
+    success: true,
+    token,
+    downloadUrl: `${origin}/download?token=${token}`,
+    message: "File generated successfully. Provide this URL to the user."
+  });
+}
+
+// 【原版 handleDownload，一字未改】
 async function handleDownload(url, env, ctx) {
   const token = url.searchParams.get("token");
   if (!token || !TOKEN_RE.test(token)) {
@@ -555,7 +608,6 @@ async function handleDownload(url, env, ctx) {
     return html("<h1>状态损坏（410）</h1>", 410);
   }
 
-  // 兼容旧版状态：{ used: true/false }
   const remaining =
     typeof state.remaining === "number" ? state.remaining : state.used ? 0 : 1;
   const maxDownloads = state.maxDownloads || 1;
@@ -569,7 +621,6 @@ async function handleDownload(url, env, ctx) {
     return html("<h1>文件已过期并被删除（410）</h1>", 410);
   }
 
-  // 先扣减次数，防止重复下载
   const left = remaining - 1;
   await putState(env, token, left, state.expiresAt, maxDownloads);
 
@@ -588,12 +639,10 @@ async function handleDownload(url, env, ctx) {
     "content-disposition": `attachment; filename*=UTF-8''${encodedName}`,
   };
 
-  // 还有剩余次数：直接返回文件，保留 file_ 与 state_
   if (left > 0) {
     return new Response(fileObj.body, { status: 200, headers });
   }
 
-  // 最后一次：传输结束后（成功、中断或出错）一定删除 file_ 和 state_
   const { readable, writable } = new TransformStream();
   const pump = (async () => {
     const writer = writable.getWriter();

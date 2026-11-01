@@ -81,6 +81,27 @@
   button.copy:hover { background: rgba(103,80,164,.08); }
   .hint { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--md-surface-variant); font-size: 13px; color: var(--md-on-surface-variant); line-height: 1.6; }
   .ver { margin-top: 8px; font-size: 11px; color: var(--md-outline); }
+  /* 修复文件选择按钮样式 */
+.drop-zone input[type="file"] {
+  width: 100%;
+  font-size: 14px;
+  color: var(--md-on-surface-variant);
+}
+.drop-zone input[type="file"]::file-selector-button {
+  margin-right: 12px;
+  padding: 10px 20px;
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background .2s;
+}
+.drop-zone input[type="file"]::file-selector-button:hover {
+  background: color-mix(in srgb, var(--md-primary-container) 92%, var(--md-primary));
+}
 </style>
 </head>
 <body>
