@@ -63,13 +63,13 @@
   <div class="card">
     <div class="top"><a class="back" href="/">← 返回</a></div>
     <h1>下载文件</h1>
-    <p class="subtitle">输入对方给你的密钥，下载文件（仅一次）。</p>
+    <p class="subtitle">输入对方给你的密钥，下载文件。</p>
 
     <label for="tokenInput">下载密钥</label>
     <input type="text" id="tokenInput" placeholder="16 位字母数字" maxlength="16" autocomplete="off" spellcheck="false" />
     <button class="primary" id="downloadBtn" disabled>下载</button>
     <div class="status" id="status"></div>
-    <div class="hint">文件只能下载一次，下载后即从服务器删除。</div>
+    <div class="hint">下载次数用完或到期后，文件会自动从服务器删除。</div>
   </div>
 
   <script>
@@ -107,7 +107,7 @@
         a.href = url; a.download = filename;
         document.body.appendChild(a); a.click(); a.remove();
         URL.revokeObjectURL(url);
-        setStatus("下载完成，文件已从服务器删除。");
+        setStatus("下载完成。");
       } catch (err) {
         setStatus(err.message, true); downloadBtn.disabled = false;
       }

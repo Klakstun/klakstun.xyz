@@ -47,6 +47,11 @@
     border-radius: var(--radius-full); background: var(--md-primary-container);
     color: var(--md-on-primary-container); font-size: 14px; font-weight: 500; cursor: pointer; transition: background .2s;
   }
+  .slider-block { margin-bottom: 20px; }
+  .slider-title { font-size: 14px; color: var(--md-on-surface-variant); margin-bottom: 8px; }
+  input[type="range"] { width: 100%; accent-color: var(--md-primary); margin: 0; height: 28px; }
+  .slider-scale { display: flex; justify-content: space-between; font-size: 12px; color: var(--md-on-surface-variant); margin-top: 2px; }
+  .slider-value { text-align: center; margin-top: 6px; font-size: 20px; font-weight: 500; color: var(--md-primary); }
   button.primary {
     position: relative; width: 100%; padding: 14px; border: none;
     border-radius: var(--radius-full); background: var(--md-primary);
@@ -68,22 +73,38 @@
     flex: 1; padding: 12px 16px; background: var(--md-surface-variant);
     border-radius: var(--radius-md); font-size: 14px; color: var(--md-on-surface); overflow-x: auto; white-space: nowrap;
   }
+  .result-expire { margin-top: 8px; font-size: 13px; color: var(--md-on-surface-variant); line-height: 1.6; }
   button.copy {
     padding: 12px 20px; border: 1px solid var(--md-outline); border-radius: var(--radius-full);
     background: transparent; color: var(--md-primary); font-size: 14px; font-weight: 500; cursor: pointer; white-space: nowrap;
   }
   button.copy:hover { background: rgba(103,80,164,.08); }
   .hint { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--md-surface-variant); font-size: 13px; color: var(--md-on-surface-variant); line-height: 1.6; }
+  .ver { margin-top: 8px; font-size: 11px; color: var(--md-outline); }
 </style>
 </head>
 <body>
   <div class="card">
     <div class="top"><a class="back" href="/">← 返回</a></div>
     <h1>上传文件</h1>
-    <p class="subtitle">选择文件，生成一次性下载密钥。</p>
+    <p class="subtitle">选择文件，生成下载密钥。</p>
 
     <div class="drop-zone" id="dropZone">
       <input type="file" id="fileInput" />
+    </div>
+
+    <div class="slider-block">
+      <div class="slider-title">保留时间（未下载完自动删除）</div>
+      <input type="range" id="ttlSlider" min="1" max="30" step="1" value="24" />
+      <div class="slider-scale"><span>1 小时</span><span>24 小时</span><span>7 天</span></div>
+      <div class="slider-value" id="ttlValue">24 小时</div>
+    </div>
+
+    <div class="slider-block">
+      <div class="slider-title">可下载次数</div>
+      <input type="range" id="countSlider" min="1" max="10" step="1" value="1" />
+      <div class="slider-scale"><span>1 次</span><span>10 次</span></div>
+      <div class="slider-value" id="countValue">1 次</div>
     </div>
 
     <button class="primary" id="uploadBtn" disabled>上传并生成密钥</button>
@@ -95,8 +116,10 @@
         <code id="tokenText"></code>
         <button class="copy" id="copyBtn">复制</button>
       </div>
+      <div class="result-expire" id="expireText"></div>
     </div>
-    <div class="hint">文件只能下载一次，下载后即删除。</div>
+    <div class="hint">下载次数用完，或超过所选保留时间，文件都会自动从服务器删除。文件以明文保存在服务器上，请勿上传高度敏感的内容。</div>
+    <div class="ver">页面版本 count-2</div>
   </div>
 
   <script>
@@ -107,7 +130,38 @@
     const resultEl = document.getElementById("result");
     const tokenText = document.getElementById("tokenText");
     const copyBtn = document.getElementById("copyBtn");
+    const ttlSlider = document.getElementById("ttlSlider");
+    const ttlValue = document.getElementById("ttlValue");
+    const countSlider = document.getElementById("countSlider");
+    const countValue = document.getElementById("countValue");
+    const expireText = document.getElementById("expireText");
     let selectedFile = null;
+
+    // 1~24 档 = 1~24 小时；25~30 档 = 2~7 天
+    function hoursFor(step) {
+      step = Number(step);
+      return step <= 24 ? step : (step - 23) * 24;
+    }
+    function labelFor(hours) {
+      if (hours < 24) return hours + " 小时";
+      if (hours === 24) return "24 小时";
+      return hours / 24 + " 天";
+    }
+    function updateTtl() {
+      ttlValue.textContent = labelFor(hoursFor(ttlSlider.value));
+    }
+    function updateCount() {
+      countValue.textContent = countSlider.value + " 次";
+    }
+    function refreshAll() { updateTtl(); updateCount(); }
+
+    ["input", "change"].forEach((evt) => {
+      ttlSlider.addEventListener(evt, updateTtl);
+      countSlider.addEventListener(evt, updateCount);
+    });
+    window.addEventListener("pageshow", refreshAll);
+    refreshAll();
+
     function setStatus(msg, isError = false) {
       statusEl.textContent = msg; statusEl.classList.add("show"); statusEl.classList.toggle("error", isError);
     }
@@ -128,12 +182,22 @@
     uploadBtn.addEventListener("click", async () => {
       if (!selectedFile) return;
       uploadBtn.disabled = true; resultEl.classList.remove("show"); setStatus("上传中…");
-      const fd = new FormData(); fd.append("file", selectedFile);
+      const hours = hoursFor(ttlSlider.value);
+      const count = Number(countSlider.value);
+      const fd = new FormData();
+      fd.append("ttlHours", String(hours));
+      fd.append("maxDownloads", String(count));
+      fd.append("file", selectedFile);
       try {
         const res = await fetch("/upload", { method: "POST", body: fd });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "上传失败");
-        setStatus("上传成功！"); tokenText.textContent = data.token; resultEl.classList.add("show");
+        setStatus("上传成功！");
+        tokenText.textContent = data.token;
+        expireText.textContent =
+          "可下载 " + (data.maxDownloads || count) + " 次；" +
+          labelFor(data.ttlHours || hours) + "内未下载完将自动删除";
+        resultEl.classList.add("show");
       } catch (err) {
         setStatus("上传失败：" + err.message, true); uploadBtn.disabled = false;
       }

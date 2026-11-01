@@ -1,6 +1,7 @@
 import indexHtml from "./html/index.html";
 import uploadHtml from "./html/upload.html";
 import downloadHtml from "./html/download.html";
+import adminHtml from "./html/admin.html";
 import error404Html from "./error/404.html";
 
 import commonCss from "./css/common.css";
@@ -9,12 +10,21 @@ import uploadCss from "./css/upload.css";
 import downloadCss from "./css/download.css";
 import styleCss from "./css/style.css";
 
-const VERSION = "inline-css-1";
+const VERSION = "admin-1";
 
 const TOKEN_LEN = 16;
 const TOKEN_CHARS =
   "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 const TOKEN_RE = /^[A-Za-z0-9]{16}$/;
+
+const HOUR_MS = 3600 * 1000;
+const DEFAULT_TTL_HOURS = 24;
+const DEFAULT_MAX_DOWNLOADS = 1;
+const MAX_DOWNLOADS_LIMIT = 10;
+const ORPHAN_MAX_AGE_MS = 8 * 24 * HOUR_MS; // 没有过期信息的旧文件，最长保留 8 天
+const GRACE_MS = 2 * HOUR_MS; // 上传/下载进行中的宽限期
+const SCAN_MAX_PAGES = 10; // 每个前缀最多扫描 10 页（每页 1000 个对象）
+const ADMIN_LIST_LIMIT = 30;
 
 function genToken() {
   const bytes = new Uint8Array(TOKEN_LEN);
@@ -22,6 +32,23 @@ function genToken() {
   let out = "";
   for (let i = 0; i < TOKEN_LEN; i++) out += TOKEN_CHARS[bytes[i] % TOKEN_CHARS.length];
   return out;
+}
+
+// 合法有效期：1~24 小时，或 48/72/96/120/144/168 小时
+function parseTtlHours(raw) {
+  const h = parseInt(raw, 10);
+  if (Number.isInteger(h)) {
+    if (h >= 1 && h <= 24) return h;
+    if (h >= 48 && h <= 168 && h % 24 === 0) return h;
+  }
+  return DEFAULT_TTL_HOURS;
+}
+
+// 合法下载次数：1~10
+function parseMaxDownloads(raw) {
+  const n = parseInt(raw, 10);
+  if (Number.isInteger(n) && n >= 1 && n <= MAX_DOWNLOADS_LIMIT) return n;
+  return DEFAULT_MAX_DOWNLOADS;
 }
 
 const CSS = {
@@ -32,7 +59,6 @@ const CSS = {
   style: styleCss,
 };
 
-// 把 <link rel="stylesheet" href="/css/xxx.css"> 替换成内联 <style>
 function inlineCss(src) {
   return String(src).replace(
     /<link\b[^>]*href=["'][^"']*\/css\/([\w-]+)\.css["'][^>]*>/gi,
@@ -71,7 +97,319 @@ function pageKey(pathname) {
   return p;
 }
 
-// 常驻诊断：只输出打包状态，不涉及 R2、token 或用户数据
+// ---------------------------------------------------------------
+// R2 基础操作
+// ---------------------------------------------------------------
+
+// 删除某个令牌对应的全部对象（文件 + 状态）
+async function purge(env, token) {
+  try {
+    await env.BUCKET.delete([`file_${token}`, `state_${token}`]);
+  } catch (e) {
+    try { await env.BUCKET.delete(`file_${token}`); } catch {}
+    try { await env.BUCKET.delete(`state_${token}`); } catch {}
+  }
+}
+
+// 批量删除多个令牌（每批最多 500 个令牌 = 1000 个键）
+async function purgeMany(env, tokens) {
+  for (let i = 0; i < tokens.length; i += 500) {
+    const keys = [];
+    for (const t of tokens.slice(i, i + 500)) {
+      keys.push(`file_${t}`, `state_${t}`);
+    }
+    try {
+      await env.BUCKET.delete(keys);
+    } catch (e) {
+      for (const t of tokens.slice(i, i + 500)) await purge(env, t);
+    }
+  }
+}
+
+// 写入状态文件（关键字段同时放进 customMetadata，供清理和后台读取，不必逐个下载 JSON）
+async function putState(env, token, remaining, expiresAt, maxDownloads) {
+  await env.BUCKET.put(
+    `state_${token}`,
+    JSON.stringify({ remaining, maxDownloads, expiresAt }),
+    {
+      httpMetadata: { contentType: "application/json" },
+      customMetadata: {
+        expiresAt: String(expiresAt || 0),
+        remaining: String(remaining),
+        maxDownloads: String(maxDownloads),
+      },
+    }
+  );
+}
+
+// 列出某前缀下的全部对象（有页数上限，超出时 truncated = true）
+async function listAll(env, prefix, withMeta) {
+  const objects = [];
+  let cursor;
+  for (let i = 0; i < SCAN_MAX_PAGES; i++) {
+    const opts = { prefix, cursor, limit: 1000 };
+    if (withMeta) opts.include = ["customMetadata"];
+    const r = await env.BUCKET.list(opts);
+    for (const o of r.objects) objects.push(o);
+    if (!r.truncated) return { objects, truncated: false };
+    cursor = r.cursor;
+  }
+  return { objects, truncated: true };
+}
+
+// 把 state_ 与 file_ 对应起来，并给每个令牌判定状态
+// active 有效 | expired 已过期 | uploading 上传中 | finishing 收尾中
+// orphan_file 孤立文件 | orphan_state 孤立状态 | stuck 下载卡住
+function buildIndex(states, files, now) {
+  const map = new Map();
+  for (const o of states) {
+    const t = o.key.slice("state_".length);
+    map.set(t, { token: t, state: o, file: null });
+  }
+  for (const o of files) {
+    const t = o.key.slice("file_".length);
+    const e = map.get(t);
+    if (e) e.file = o;
+    else map.set(t, { token: t, state: null, file: o });
+  }
+
+  const items = [];
+  for (const e of map.values()) {
+    const md = (e.state && e.state.customMetadata) || {};
+    const exp = Number(md.expiresAt) || 0;
+    const remaining = md.remaining !== undefined ? Number(md.remaining) : null;
+    const maxDl = md.maxDownloads !== undefined ? Number(md.maxDownloads) : null;
+    const uploaded = new Date((e.file || e.state).uploaded).getTime();
+    const stateTime = e.state ? new Date(e.state.uploaded).getTime() : uploaded;
+
+    let status;
+    if (!e.state) status = now - uploaded > GRACE_MS ? "orphan_file" : "uploading";
+    else if (!e.file) status = now - stateTime > GRACE_MS ? "orphan_state" : "finishing";
+    else if (exp > 0 && exp <= now) status = "expired";
+    else if (now - uploaded > ORPHAN_MAX_AGE_MS) status = "expired";
+    else if (remaining === 0) status = now - stateTime > GRACE_MS ? "stuck" : "finishing";
+    else status = "active";
+
+    items.push({
+      token: e.token,
+      status,
+      size: e.file ? e.file.size : 0,
+      uploaded,
+      expiresAt: exp || null,
+      remaining,
+      maxDownloads: maxDl,
+    });
+  }
+  return items;
+}
+
+// 清理：删除过期、孤立、卡住的对象，并记录最近一次结果
+async function sweep(env, trigger) {
+  const now = Date.now();
+  const [s, f] = await Promise.all([
+    listAll(env, "state_", true),
+    listAll(env, "file_", false),
+  ]);
+  const items = buildIndex(s.objects, f.objects, now);
+
+  const result = {
+    at: now,
+    trigger,
+    scanned: items.length,
+    expired: 0,
+    orphans: 0,
+    stuck: 0,
+    truncated: s.truncated || f.truncated,
+  };
+  const doomed = [];
+  for (const it of items) {
+    if (it.status === "expired") { result.expired++; doomed.push(it.token); }
+    else if (it.status === "orphan_file" || it.status === "orphan_state") { result.orphans++; doomed.push(it.token); }
+    else if (it.status === "stuck") { result.stuck++; doomed.push(it.token); }
+  }
+  await purgeMany(env, doomed);
+
+  try {
+    await env.BUCKET.put("meta_sweep", JSON.stringify(result), {
+      httpMetadata: { contentType: "application/json" },
+    });
+  } catch {}
+  return result;
+}
+
+// ---------------------------------------------------------------
+// 运维后台
+// ---------------------------------------------------------------
+
+async function sha256(s) {
+  return new Uint8Array(
+    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s))
+  );
+}
+
+// 返回 true | false | "unconfigured"
+async function checkAdmin(request, env) {
+  if (!env.ADMIN_TOKEN) return "unconfigured";
+  const m = (request.headers.get("authorization") || "").match(/^Bearer (.+)$/);
+  if (!m) return false;
+  const [a, b] = await Promise.all([sha256(m[1]), sha256(String(env.ADMIN_TOKEN))]);
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
+  return diff === 0;
+}
+
+const adminJson = (obj, status = 200) =>
+  new Response(JSON.stringify(obj), {
+    status,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store",
+      "x-robots-tag": "noindex, nofollow",
+    },
+  });
+
+const adminPage = () =>
+  new Response(adminHtml, {
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-store",
+      "x-robots-tag": "noindex, nofollow",
+    },
+  });
+
+// 统计：只返回数量、体积、时间，令牌只显示前 4 位，不返回文件名
+async function collectStats(env) {
+  const now = Date.now();
+  const [s, f] = await Promise.all([
+    listAll(env, "state_", true),
+    listAll(env, "file_", false),
+  ]);
+  const items = buildIndex(s.objects, f.objects, now);
+
+  const counts = {};
+  let totalBytes = 0;
+  let oldest = null;
+  for (const it of items) {
+    counts[it.status] = (counts[it.status] || 0) + 1;
+    totalBytes += it.size;
+    if (it.uploaded && (oldest === null || it.uploaded < oldest)) oldest = it.uploaded;
+  }
+
+  items.sort((a, b) => b.uploaded - a.uploaded);
+  const list = items.slice(0, ADMIN_LIST_LIMIT).map((it) => ({
+    id: it.token.slice(0, 4) + "************",
+    status: it.status,
+    size: it.size,
+    uploaded: it.uploaded,
+    expiresAt: it.expiresAt,
+    remaining: it.remaining,
+    maxDownloads: it.maxDownloads,
+  }));
+
+  let lastSweep = null;
+  try {
+    const o = await env.BUCKET.get("meta_sweep");
+    if (o) lastSweep = await o.json();
+  } catch {}
+
+  return {
+    now,
+    total: items.length,
+    counts,
+    totalBytes,
+    oldest,
+    truncated: s.truncated || f.truncated,
+    list,
+    lastSweep,
+  };
+}
+
+function serverInfo(env) {
+  const len = (v) => (v == null ? null : String(v).length);
+  return {
+    version: VERSION,
+    bucketBound: !!(env && env.BUCKET),
+    cron: "0 * * * *",
+    limits: {
+      maxDownloads: MAX_DOWNLOADS_LIMIT,
+      maxTtlHours: 168,
+      graceHours: GRACE_MS / HOUR_MS,
+      legacyMaxDays: ORPHAN_MAX_AGE_MS / (24 * HOUR_MS),
+    },
+    bundle: {
+      "index.html": len(indexHtml),
+      "upload.html": len(uploadHtml),
+      "download.html": len(downloadHtml),
+      "admin.html": len(adminHtml),
+      "404.html": len(error404Html),
+      "common.css": len(commonCss),
+      "index.css": len(indexCss),
+      "upload.css": len(uploadCss),
+      "download.css": len(downloadCss),
+      "style.css": len(styleCss),
+    },
+  };
+}
+
+// 存储桶自检：写入、读取、删除一个临时对象
+async function selfTest(env) {
+  const key = "meta_selftest_" + genToken();
+  const out = { ok: false };
+  try {
+    let t = Date.now();
+    await env.BUCKET.put(key, "ok");
+    out.putMs = Date.now() - t;
+
+    t = Date.now();
+    const o = await env.BUCKET.get(key);
+    const txt = o ? await o.text() : null;
+    out.getMs = Date.now() - t;
+    out.readBack = txt === "ok";
+
+    t = Date.now();
+    await env.BUCKET.delete(key);
+    out.deleteMs = Date.now() - t;
+    out.deleted = (await env.BUCKET.head(key)) === null;
+
+    out.ok = out.readBack && out.deleted;
+  } catch (e) {
+    out.error = String((e && e.message) || e);
+    try { await env.BUCKET.delete(key); } catch {}
+  }
+  return out;
+}
+
+async function handleAdminApi(request, url, env) {
+  const auth = await checkAdmin(request, env);
+  if (auth === "unconfigured") {
+    return adminJson({ error: "服务端未配置 ADMIN_TOKEN" }, 503);
+  }
+  if (!auth) {
+    await new Promise((r) => setTimeout(r, 500)); // 失败时稍作延迟，减缓暴力尝试
+    return adminJson({ error: "unauthorized" }, 401);
+  }
+
+  const path = url.pathname;
+  try {
+    if (request.method === "GET" && path === "/admin/api/stats") {
+      return adminJson({ ...(await collectStats(env)), server: serverInfo(env) });
+    }
+    if (request.method === "POST" && path === "/admin/api/sweep") {
+      return adminJson(await sweep(env, "manual"));
+    }
+    if (request.method === "POST" && path === "/admin/api/selftest") {
+      return adminJson(await selfTest(env));
+    }
+  } catch (e) {
+    return adminJson({ error: String((e && e.message) || e) }, 500);
+  }
+  return adminJson({ error: "not found" }, 404);
+}
+
+// ---------------------------------------------------------------
+// 公开的简易诊断（只输出打包状态，不涉及 R2 内容）
+// ---------------------------------------------------------------
+
 function debugResponse(request, url, env) {
   const info = (name, v) =>
     name + ": " + typeof v + " len=" + (v == null ? "null" : String(v).length);
@@ -87,10 +425,12 @@ function debugResponse(request, url, env) {
     info("index.html", indexHtml),
     info("upload.html", uploadHtml),
     info("download.html", downloadHtml),
+    info("admin.html", adminHtml),
     info("404.html", error404Html),
     "",
     "[binding]",
     "BUCKET bound: " + (env && env.BUCKET ? "yes" : "no"),
+    "ADMIN_TOKEN set: " + (env && env.ADMIN_TOKEN ? "yes" : "no"),
     "",
     "[request]",
     "method: " + request.method,
@@ -99,6 +439,9 @@ function debugResponse(request, url, env) {
     "[inline test]",
     "index.html has <link>: " + /<link\b/i.test(String(indexHtml)),
     "after inline has <style>: " + /<style>/i.test(inlineCss(indexHtml)),
+    "upload.html has count-2: " + String(uploadHtml).includes("count-2"),
+    "",
+    "详细信息见 /admin",
   ];
   return new Response(lines.join("\n"), {
     headers: {
@@ -108,34 +451,46 @@ function debugResponse(request, url, env) {
   });
 }
 
+// ---------------------------------------------------------------
+// 入口
+// ---------------------------------------------------------------
+
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const isGet = request.method === "GET" || request.method === "HEAD";
 
-    // 诊断
+    if (url.pathname.startsWith("/admin/api/")) {
+      return handleAdminApi(request, url, env);
+    }
+
     if (isGet && url.pathname === "/debug") {
       return debugResponse(request, url, env);
     }
 
-    // 上传
     if (request.method === "POST" && pageKey(url.pathname) === "upload") {
       return handleUpload(request, env);
     }
 
-    // 页面
     if (isGet) {
       const key = pageKey(url.pathname);
+      if (key === "admin") {
+        return adminPage();
+      }
       if (key === "download" && url.searchParams.has("token")) {
-        return handleDownload(url, env);
+        return handleDownload(url, env, ctx);
       }
       if (Object.prototype.hasOwnProperty.call(PAGES, key)) {
         return html(PAGES[key]);
       }
     }
 
-    // 兜底 404
     return html(error404Html, 404);
+  },
+
+  // 定时任务：每小时清理一次
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(sweep(env, "cron"));
   },
 };
 
@@ -152,23 +507,35 @@ async function handleUpload(request, env) {
     return json({ error: "未选择文件" }, 400);
   }
 
+  const ttlHours = parseTtlHours(form.get("ttlHours"));
+  const maxDownloads = parseMaxDownloads(form.get("maxDownloads"));
+  const expiresAt = Date.now() + ttlHours * HOUR_MS;
+
   const token = genToken();
   const fileName = file.name || "download";
   const contentType = file.type || "application/octet-stream";
 
-  await env.BUCKET.put(`file_${token}`, file.stream(), {
-    httpMetadata: { contentType },
-    customMetadata: { fileName },
-  });
+  try {
+    await env.BUCKET.put(`file_${token}`, file.stream(), {
+      httpMetadata: { contentType },
+      customMetadata: { fileName },
+    });
+    await putState(env, token, maxDownloads, expiresAt, maxDownloads);
+  } catch (e) {
+    await purge(env, token);
+    return json({ error: "上传失败，请重试" }, 500);
+  }
 
-  await env.BUCKET.put(`state_${token}`, JSON.stringify({ used: false }), {
-    httpMetadata: { contentType: "application/json" },
+  return json({
+    token,
+    ttlHours,
+    maxDownloads,
+    expiresAt,
+    downloadUrl: `/download?token=${token}`,
   });
-
-  return json({ token, downloadUrl: `/download?token=${token}` });
 }
 
-async function handleDownload(url, env) {
+async function handleDownload(url, env, ctx) {
   const token = url.searchParams.get("token");
   if (!token || !TOKEN_RE.test(token)) {
     return html("<h1>无效的密钥</h1>", 400);
@@ -176,6 +543,7 @@ async function handleDownload(url, env) {
 
   const stateObj = await env.BUCKET.get(`state_${token}`);
   if (!stateObj) {
+    ctx.waitUntil(purge(env, token));
     return html("<h1>文件不存在或已被下载（410）</h1>", 410);
   }
 
@@ -183,30 +551,52 @@ async function handleDownload(url, env) {
   try {
     state = await stateObj.json();
   } catch {
+    ctx.waitUntil(purge(env, token));
     return html("<h1>状态损坏（410）</h1>", 410);
   }
-  if (state.used) {
+
+  // 兼容旧版状态：{ used: true/false }
+  const remaining =
+    typeof state.remaining === "number" ? state.remaining : state.used ? 0 : 1;
+  const maxDownloads = state.maxDownloads || 1;
+
+  if (remaining <= 0) {
+    ctx.waitUntil(purge(env, token));
     return html("<h1>该密钥已被使用（410）</h1>", 410);
   }
+  if (state.expiresAt && Date.now() > state.expiresAt) {
+    ctx.waitUntil(purge(env, token));
+    return html("<h1>文件已过期并被删除（410）</h1>", 410);
+  }
 
-  await env.BUCKET.put(`state_${token}`, JSON.stringify({ used: true }), {
-    httpMetadata: { contentType: "application/json" },
-  });
+  // 先扣减次数，防止重复下载
+  const left = remaining - 1;
+  await putState(env, token, left, state.expiresAt, maxDownloads);
 
   const fileObj = await env.BUCKET.get(`file_${token}`);
   if (!fileObj) {
-    await env.BUCKET.delete(`state_${token}`);
+    ctx.waitUntil(purge(env, token));
     return html("<h1>文件不存在（410）</h1>", 410);
   }
 
   const fileName = fileObj.customMetadata?.fileName || "download";
   const contentType =
     fileObj.httpMetadata?.contentType || "application/octet-stream";
+  const encodedName = encodeURIComponent(fileName);
+  const headers = {
+    "content-type": contentType,
+    "content-disposition": `attachment; filename*=UTF-8''${encodedName}`,
+  };
 
+  // 还有剩余次数：直接返回文件，保留 file_ 与 state_
+  if (left > 0) {
+    return new Response(fileObj.body, { status: 200, headers });
+  }
+
+  // 最后一次：传输结束后（成功、中断或出错）一定删除 file_ 和 state_
   const { readable, writable } = new TransformStream();
-  const writer = writable.getWriter();
-
-  (async () => {
+  const pump = (async () => {
+    const writer = writable.getWriter();
     try {
       const reader = fileObj.body.getReader();
       while (true) {
@@ -218,19 +608,10 @@ async function handleDownload(url, env) {
     } catch (e) {
       try { await writer.abort(e); } catch {}
     } finally {
-      try {
-        await env.BUCKET.delete(`file_${token}`);
-        await env.BUCKET.delete(`state_${token}`);
-      } catch {}
+      await purge(env, token);
     }
   })();
+  ctx.waitUntil(pump);
 
-  const encodedName = encodeURIComponent(fileName);
-  return new Response(readable, {
-    status: 200,
-    headers: {
-      "content-type": contentType,
-      "content-disposition": `attachment; filename*=UTF-8''${encodedName}`,
-    },
-  });
+  return new Response(readable, { status: 200, headers });
 }
