@@ -1,0 +1,105 @@
+:root {
+  --md-primary: #6750a4;
+  --md-on-primary: #fff;
+  --md-primary-container: #eaddff;
+  --md-on-primary-container: #21005d;
+  --md-surface: #fef7ff;
+  --md-on-surface: #1d1b20;
+  --md-surface-variant: #e7e0ec;
+  --md-on-surface-variant: #49454f;
+  --md-outline: #79747e;
+  --md-error: #b3261e;
+  --radius-full: 999px;
+  --radius-md: 16px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--md-surface);
+  color: var(--md-on-surface);
+  font-family: "Roboto", "Noto Sans SC", system-ui, -apple-system, sans-serif;
+}
+
+.card {
+  width: 100%;
+  max-width: 480px;
+  background: #fff;
+  border-radius: 28px;
+  padding: 32px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.12), 0 4px 12px rgba(0,0,0,.08);
+}
+
+h1 { font-size: 22px; font-weight: 500; margin: 0 0 8px; }
+
+.subtitle {
+  font-size: 14px;
+  color: var(--md-on-surface-variant);
+  margin: 0 0 24px;
+  line-height: 1.5;
+}
+
+.top { display: flex; align-items: center; margin-bottom: 20px; }
+
+a.back {
+  text-decoration: none;
+  color: var(--md-primary);
+  font-size: 14px;
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+}
+a.back:hover { background: rgba(103,80,164,.08); }
+
+button.primary {
+  position: relative;
+  width: 100%;
+  padding: 14px;
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  overflow: hidden;
+  transition: box-shadow .2s;
+}
+button.primary:hover::before,
+button.primary:active::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: currentColor;
+}
+button.primary:hover::before { opacity: .08; }
+button.primary:active::before { opacity: .10; }
+button.primary:disabled {
+  background: var(--md-surface-variant);
+  color: var(--md-on-surface-variant);
+  cursor: not-allowed;
+}
+
+.status {
+  margin-top: 20px;
+  font-size: 14px;
+  line-height: 1.6;
+  word-break: break-all;
+  display: none;
+}
+.status.show { display: block; }
+.status.error { color: var(--md-error); }
+
+.hint {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--md-surface-variant);
+  font-size: 13px;
+  color: var(--md-on-surface-variant);
+  line-height: 1.6;
+}
