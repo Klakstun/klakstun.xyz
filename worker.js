@@ -10,7 +10,7 @@ import uploadCss from "./css/upload.css";
 import downloadCss from "./css/download.css";
 import styleCss from "./css/style.css";
 
-const VERSION = "admin-1";
+const VERSION = "admin-2";
 
 const TOKEN_LEN = 16;
 const TOKEN_CHARS =
@@ -544,15 +544,41 @@ async function handleUpload(request, env) {
   });
 }
 
+async function readTextLimited(request, maxBytes) {
+  if (!request.body) return "";
+  const reader = request.body.getReader();
+  const chunks = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (total > maxBytes) {
+      try { await reader.cancel(); } catch {}
+      return null;
+    }
+    chunks.push(value);
+  }
+  const buf = new Uint8Array(total);
+  let off = 0;
+  for (const c of chunks) { buf.set(c, off); off += c.length; }
+  return new TextDecoder().decode(buf);
+}
+
 async function handleAiUpload(request, env) {
   const contentLength = parseInt(request.headers.get("content-length"), 10);
   if (contentLength && contentLength > 2 * 1024 * 1024) {
     return aiJson({ error: "Payload too large. Maximum size is 2MB." }, 413);
   }
 
+  const raw = await readTextLimited(request, 2 * 1024 * 1024);
+  if (raw === null) {
+    return aiJson({ error: "Payload too large. Maximum size is 2MB." }, 413);
+  }
+
   let body;
   try {
-    body = await request.json();
+    body = JSON.parse(raw);
   } catch {
     return aiJson({ error: "Invalid JSON format." }, 400);
   }
@@ -575,16 +601,16 @@ async function handleAiUpload(request, env) {
   const contentType = (typeof body.type === "string" && body.type) ? body.type : "text/plain; charset=utf-8";
   const textContent = body.text;
 
-  const authHeader = request.headers.get("Authorization");
-  const isOwner = authHeader && authHeader === `Bearer ${env.ADMIN_TOKEN}`;
+  const isOwner = (await checkAdmin(request, env)) === true;
 
   let ttlHours, maxDownloads;
 
   if (isOwner) {
-    ttlHours = parseInt(body.ttlHours, 10) || 168;
-    maxDownloads = parseInt(body.maxDownloads, 10) || 10;
-    if (ttlHours > 168) ttlHours = 168; 
-    if (maxDownloads > 10) maxDownloads = 10;
+    ttlHours = Math.min(168, Math.max(1, parseInt(body.ttlHours, 10) || 168));
+    maxDownloads = Math.min(
+      MAX_DOWNLOADS_LIMIT,
+      Math.max(1, parseInt(body.maxDownloads, 10) || MAX_DOWNLOADS_LIMIT)
+    );
   } else {
     ttlHours = 1;
     maxDownloads = 1;
