@@ -206,8 +206,7 @@
       <div class="api-wrapper">
         <div class="api-content">
           <div class="api-content-inner">
-            <p><strong>公共接口：</strong>支持任意内容字符串，限制最大 2MB，过期时间 1 小时，仅限下载 1 次。</p>
-            <p><strong>特权接口：</strong>在 Header 中带上 <code>Authorization: Bearer ADMIN_TOKEN</code>，可自定义类型、保留时间和下载次数（最高 7 天）。</p>
+            <p>支持任意内容字符串，限制最大 2MB，有效期 1 小时，仅可下载 1 次。</p>
             <p><strong>Endpoint:</strong> <code>POST /api/upload</code></p>
             
             <p><strong>Request JSON:</strong></p>
@@ -216,9 +215,7 @@
               <pre>{
   "text": "文件内容或 Base64 数据",
   "filename": "output.txt",
-  "type": "text/plain",
-  "ttlHours": 168,
-  "maxDownloads": 5
+  "type": "text/plain"
 }</pre>
             </div>
 
