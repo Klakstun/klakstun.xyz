@@ -426,7 +426,6 @@ function debugResponse(request, url, env) {
     "",
     "[binding]",
     "BUCKET bound: " + (env && env.BUCKET ? "yes" : "no"),
-    "ADMIN_TOKEN set: " + (env && env.ADMIN_TOKEN ? "yes" : "no"),
     "",
     "[request]",
     "method: " + request.method,
@@ -437,7 +436,6 @@ function debugResponse(request, url, env) {
     "after inline has <style>: " + /<style>/i.test(inlineCss(indexHtml)),
     "upload.html has count-2: " + String(uploadHtml).includes("count-2"),
     "",
-    "详细信息见 /admin",
   ];
   return new Response(lines.join("\n"), {
     headers: {
